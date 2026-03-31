@@ -1,0 +1,11 @@
+﻿docker : error during connect: Head 
+"http://%2F%2F.%2Fpipe%2FdockerDesktopLinuxEngine/_ping": open 
+//./pipe/dockerDesktopLinuxEngine: The system cannot find the file specified.
+At line:1 char:1
++ docker compose build 2>&1 | Out-File -FilePath build_error.txt -Encod ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error during co...file specified. 
+   :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+

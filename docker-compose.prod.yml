@@ -1,0 +1,25 @@
+name: trello
+
+# Production overrides — apply with:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+services:
+  db:
+    restart: always
+    ports: []  # do not expose DB port to the host in production
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}  # required — no default
+
+  web:
+    build:
+      context: ./server
+      target: production
+    volumes: []  # no bind mounts in production
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.production
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
