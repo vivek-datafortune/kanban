@@ -34,7 +34,14 @@ export default function AuthCallbackPage() {
         setCookie("access", data.access, { path: "/", maxAge: 3600, sameSite: "lax" })
         setCookie("refresh", data.refresh, { path: "/", maxAge: 604800, sameSite: "lax" })
         setUser(data.user)
-        navigate("/", { replace: true })
+        // Check for a pending redirect (e.g. invitation accept)
+        const next = sessionStorage.getItem("invite_next")
+        if (next) {
+          sessionStorage.removeItem("invite_next")
+          navigate(next, { replace: true })
+        } else {
+          navigate("/", { replace: true })
+        }
       })
       .catch((err) => {
         setStatus("error")

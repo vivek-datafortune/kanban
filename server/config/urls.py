@@ -3,6 +3,7 @@ from django.contrib import admin
 from django.urls import include, path
 
 from apps.users.urls import social_urlpatterns
+from apps.workspaces.views import InvitationAcceptView
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -18,6 +19,8 @@ urlpatterns = [
     path("api/workspaces/", include("apps.workspaces.urls")),
     # Boards, lists, cards
     path("api/", include("apps.boards.urls")),
+    # Invitation accept (top-level — invitee doesn't know the workspace slug)
+    path("api/invitations/accept/", InvitationAcceptView.as_view(), name="invitation-accept"),
 ]
 
 if settings.DEBUG:

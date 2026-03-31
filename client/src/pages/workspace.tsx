@@ -1,10 +1,11 @@
 import { useState } from "react"
 import { Link, useParams } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
-import { Plus, Lock, Globe, X, Pin } from "lucide-react"
+import { Plus, Lock, Globe, X, Pin, Users } from "lucide-react"
 import { useWorkspace } from "@/hooks/use-workspaces"
 import { useBoards, useCreateBoard, useStarBoard } from "@/hooks/use-boards"
 import BackButton from "@/components/ui/back-button"
+import MembersModal from "@/components/workspace/members-modal"
 import { cn } from "@/lib/utils"
 
 const BOARD_COLORS = [
@@ -21,6 +22,9 @@ export default function WorkspacePage() {
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [newTitle, setNewTitle] = useState("")
   const [newColor, setNewColor] = useState(BOARD_COLORS[0])
+  const [showMembers, setShowMembers] = useState(false)
+
+  const isAdminOrOwner = workspace?.role === "owner" || workspace?.role === "admin"
 
   const starredBoards = boards?.filter((b) => b.is_starred) ?? []
 
@@ -59,7 +63,17 @@ export default function WorkspacePage() {
             <p className="text-xs text-muted-foreground truncate">{workspace.description}</p>
           )}
         </div>
-        <div className="ml-auto shrink-0">
+        <div className="ml-auto shrink-0 flex items-center gap-2">
+          {isAdminOrOwner && (
+            <button
+              onClick={() => setShowMembers(true)}
+              className="bg-secondary text-foreground border border-border rounded-lg px-4 py-2.5 text-sm font-semibold
+                         hover:bg-secondary/80 transition-colors cursor-pointer flex items-center gap-2"
+            >
+              <Users className="size-4" />
+              Members
+            </button>
+          )}
           <button
             onClick={() => setShowCreateForm(true)}
             className="bg-primary text-primary-foreground rounded-lg px-4 py-2.5 text-sm font-semibold
@@ -235,6 +249,11 @@ export default function WorkspacePage() {
       </motion.div>
         </div>
       </div>
+
+      {/* Members modal */}
+      {isAdminOrOwner && (
+        <MembersModal slug={slug!} open={showMembers} onClose={() => setShowMembers(false)} />
+      )}
     </div>
   )
 }

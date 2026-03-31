@@ -2,7 +2,7 @@ from rest_framework import serializers
 
 from apps.users.serializers import UserSerializer
 
-from .models import Workspace, WorkspaceMembership
+from .models import Workspace, WorkspaceInvitation, WorkspaceMembership
 
 
 class WorkspaceMembershipSerializer(serializers.ModelSerializer):
@@ -74,3 +74,51 @@ class ChangeMemberRoleSerializer(serializers.Serializer):
             (WorkspaceMembership.Role.MEMBER, "Member"),
         ],
     )
+
+
+# ── Invitation Serializers ────────────────────────────────────────────────────
+
+
+class InvitationListSerializer(serializers.ModelSerializer):
+    invited_by = UserSerializer(read_only=True)
+
+    class Meta:
+        model = WorkspaceInvitation
+        fields = (
+            "id", "email", "role", "status",
+            "invited_by", "created_at", "expires_at",
+        )
+        read_only_fields = fields
+
+
+class InvitationCreateSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    role = serializers.ChoiceField(
+        choices=[
+            (WorkspaceMembership.Role.ADMIN, "Admin"),
+            (WorkspaceMembership.Role.MEMBER, "Member"),
+        ],
+        default=WorkspaceMembership.Role.MEMBER,
+    )
+
+    def validate_email(self, value):
+        workspace = self.context["workspace"]
+        # Already a member?
+        if WorkspaceMembership.objects.filter(
+            workspace=workspace, user__email=value
+        ).exists():
+            raise serializers.ValidationError(
+                "This user is already a member of the workspace."
+            )
+        # Already has a pending invitation?
+        if WorkspaceInvitation.objects.filter(
+            workspace=workspace, email=value, status=WorkspaceInvitation.Status.PENDING
+        ).exists():
+            raise serializers.ValidationError(
+                "A pending invitation already exists for this email."
+            )
+        return value
+
+
+class InvitationAcceptSerializer(serializers.Serializer):
+    token = serializers.CharField()

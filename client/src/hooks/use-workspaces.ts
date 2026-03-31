@@ -73,3 +73,16 @@ export function useRemoveMember(slug: string) {
       queryClient.invalidateQueries({ queryKey: ["workspaces", slug, "members"] }),
   })
 }
+
+export function useChangeMemberRole(slug: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (data: { memberId: string; role: string }) =>
+      api.patch<WorkspaceMember>(
+        `/workspaces/${slug}/members/${data.memberId}/`,
+        { role: data.role }
+      ),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["workspaces", slug, "members"] }),
+  })
+}

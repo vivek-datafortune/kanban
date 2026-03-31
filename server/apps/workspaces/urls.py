@@ -15,4 +15,25 @@ urlpatterns = [
         views.WorkspaceMemberDetailView.as_view(),
         name="workspace-member-detail",
     ),
+    # Invitations
+    path(
+        "<slug:slug>/invitations/",
+        views.InvitationListCreateView.as_view(),
+        name="workspace-invitations",
+    ),
+    path(
+        "<slug:slug>/invitations/<uuid:pk>/",
+        views.InvitationDeleteView.as_view(),
+        name="workspace-invitation-delete",
+    ),
+    path(
+        "<slug:slug>/invitations/<uuid:pk>/resend/",
+        views.InvitationResendView.as_view(),
+        name="workspace-invitation-resend",
+    ),
+    path(
+        "<slug:slug>/invitations/<uuid:pk>/revoke/",
+        views.InvitationRevokeView.as_view(),
+        name="workspace-invitation-revoke",
+    ),
 ]

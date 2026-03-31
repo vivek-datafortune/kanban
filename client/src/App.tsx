@@ -1,6 +1,7 @@
 ﻿import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
 import LoginPage from "@/pages/login"
 import AuthCallbackPage from "@/pages/auth-callback"
+import InvitePage from "@/pages/invite"
 import HomePage from "@/pages/home"
 import CreateWorkspacePage from "@/pages/create-workspace"
 import WorkspacePage from "@/pages/workspace"
@@ -18,6 +19,7 @@ function App() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/auth/callback" element={<AuthCallbackPage />} />
+        <Route path="/invite/:token" element={<InvitePage />} />
         <Route
           element={
             <ProtectedRoute>

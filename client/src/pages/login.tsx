@@ -1,10 +1,21 @@
-﻿import { motion } from "framer-motion"
+﻿import { useEffect } from "react"
+import { useSearchParams } from "react-router-dom"
+import { motion } from "framer-motion"
 import { Kanban, Loader2 } from "lucide-react"
 import { useAuthUrl } from "@/hooks/use-auth"
 
 export default function LoginPage() {
   const { data: msData, isLoading: msLoading } = useAuthUrl("microsoft")
   const { data: gData, isLoading: gLoading } = useAuthUrl("google")
+  const [searchParams] = useSearchParams()
+
+  // Store the redirect-after-login URL so auth-callback can use it
+  useEffect(() => {
+    const next = searchParams.get("next")
+    if (next) {
+      sessionStorage.setItem("invite_next", next)
+    }
+  }, [searchParams])
 
   return (
     <div className="min-h-screen bg-glass-bg flex items-center justify-center p-6">

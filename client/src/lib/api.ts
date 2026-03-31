@@ -1,5 +1,17 @@
 const API_BASE = '/api'
 
+export class ApiError extends Error {
+  status: number
+  data: Record<string, unknown>
+
+  constructor(message: string, status: number, data: Record<string, unknown> = {}) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+    this.data = data
+  }
+}
+
 function getCookie(name: string): string | undefined {
   const value = `; ${document.cookie}`
   const parts = value.split(`; ${name}=`)
@@ -36,7 +48,11 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(error.detail || `Request failed: ${response.status}`)
+    throw new ApiError(
+      error.detail || `Request failed: ${response.status}`,
+      response.status,
+      error,
+    )
   }
 
   if (response.status === 204) return {} as T

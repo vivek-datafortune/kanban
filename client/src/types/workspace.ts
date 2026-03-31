@@ -1,6 +1,7 @@
 import type { User } from "./auth"
 
 export type Role = "owner" | "admin" | "member"
+export type InvitationStatus = "pending" | "accepted" | "expired" | "revoked"
 
 export interface Workspace {
   id: string
@@ -18,4 +19,14 @@ export interface WorkspaceMember {
   user: User
   role: Role
   joined_at: string
+}
+
+export interface WorkspaceInvitation {
+  id: string
+  email: string
+  role: Role
+  status: InvitationStatus
+  invited_by: User
+  created_at: string
+  expires_at: string
 }
