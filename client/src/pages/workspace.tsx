@@ -48,18 +48,18 @@ export default function WorkspacePage() {
         className="bg-card/80 backdrop-blur px-6 py-3 flex items-center gap-4 border-b border-border/30"
       >
         <BackButton to="/" label="Home" />
-        <div className="size-8 rounded-lg bg-primary/10 flex items-center justify-center">
+        <div className="size-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
           <span className="text-sm font-bold text-primary">
             {(workspace?.name?.[0] ?? "W").toUpperCase()}
           </span>
         </div>
-        <div>
-          <h2 className="text-lg font-bold text-foreground">{workspace?.name || "Workspace"}</h2>
+        <div className="min-w-0">
+          <h2 className="text-lg font-bold text-foreground truncate">{workspace?.name || "Workspace"}</h2>
           {workspace?.description && (
-            <p className="text-xs text-muted-foreground">{workspace.description}</p>
+            <p className="text-xs text-muted-foreground truncate">{workspace.description}</p>
           )}
         </div>
-        <div className="ml-auto">
+        <div className="ml-auto shrink-0">
           <button
             onClick={() => setShowCreateForm(true)}
             className="bg-primary text-primary-foreground rounded-lg px-4 py-2.5 text-sm font-semibold

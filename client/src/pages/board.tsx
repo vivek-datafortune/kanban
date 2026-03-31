@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from "react"
-import { useParams } from "react-router-dom"
+import { useParams, useNavigate } from "react-router-dom"
 import { motion } from "framer-motion"
 import { DragDropContext, Droppable, type DropResult } from "@hello-pangea/dnd"
 import { Pin, MoreHorizontal, Plus } from "lucide-react"
@@ -10,16 +10,15 @@ import type { List } from "@/types/board"
 import { cn } from "@/lib/utils"
 import BackButton from "@/components/ui/back-button"
 import BoardList from "@/components/board/board-list"
-import CardDetailModal from "@/components/board/card-detail-modal"
 
 export default function BoardPage() {
   const { slug, boardId } = useParams<{ slug: string; boardId: string }>()
+  const navigate = useNavigate()
   const { data: board, isLoading } = useBoard(boardId!)
   const { mutate: moveCard } = useMoveCard(boardId!)
   const { mutate: createList, isPending: isCreatingList } = useCreateList(boardId!)
   const { mutate: updateList } = useUpdateList(boardId!)
 
-  const [selectedCardId, setSelectedCardId] = useState<string | null>(null)
   const [showAddList, setShowAddList] = useState(false)
   const [newListTitle, setNewListTitle] = useState("")
 
@@ -148,15 +147,6 @@ export default function BoardPage() {
     )
   }
 
-  const selectedCard = useMemo(() => {
-    if (!selectedCardId) return null
-    for (const list of lists) {
-      const card = list.cards.find((c) => c.id === selectedCardId)
-      if (card) return card
-    }
-    return null
-  }, [selectedCardId, lists])
-
   if (isLoading) {
     return (
       <div className="h-screen flex items-center justify-center">
@@ -214,7 +204,7 @@ export default function BoardPage() {
                     list={list}
                     index={index}
                     boardId={boardId!}
-                    onCardClick={setSelectedCardId}
+                    onCardClick={(cardId) => navigate(`/w/${slug}/b/${boardId}/c/${cardId}`)}
                   />
                 ))}
                 {provided.placeholder}
@@ -275,16 +265,6 @@ export default function BoardPage() {
         </DragDropContext>
       </div>
 
-      {/* Card detail modal */}
-      {selectedCard && (
-        <CardDetailModal
-          card={selectedCard}
-          boardId={boardId!}
-          lists={board.lists ?? []}
-          labels={board.labels ?? []}
-          onClose={() => setSelectedCardId(null)}
-        />
-      )}
     </div>
   )
 }

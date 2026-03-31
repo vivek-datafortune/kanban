@@ -5,6 +5,7 @@ import HomePage from "@/pages/home"
 import CreateWorkspacePage from "@/pages/create-workspace"
 import WorkspacePage from "@/pages/workspace"
 import BoardPage from "@/pages/board"
+import CardPage from "@/pages/card"
 import AppLayout from "@/components/app-layout"
 import ProtectedRoute from "@/components/protected-route"
 import { useTheme } from "@/hooks/use-theme"
@@ -28,6 +29,7 @@ function App() {
           <Route path="/create-workspace" element={<CreateWorkspacePage />} />
           <Route path="/w/:slug" element={<WorkspacePage />} />
           <Route path="/w/:slug/b/:boardId" element={<BoardPage />} />
+          <Route path="/w/:slug/b/:boardId/c/:cardId" element={<CardPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

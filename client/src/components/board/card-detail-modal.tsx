@@ -2,8 +2,10 @@ import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   X, AlignLeft, Tag, Users, Calendar, Trash2, CheckCircle2,
+  Plus, Pencil, ArrowLeft,
 } from "lucide-react"
 import { useUpdateCard, useDeleteCard, useAddCardLabel, useRemoveCardLabel } from "@/hooks/use-cards"
+import { useCreateLabel, useUpdateLabel, useDeleteLabel } from "@/hooks/use-labels"
 import { cn } from "@/lib/utils"
 import type { Card, Label, List } from "@/types/board"
 
@@ -26,11 +28,18 @@ export default function CardDetailModal({
   const { mutate: deleteCard } = useDeleteCard(boardId)
   const { mutate: addLabel } = useAddCardLabel(boardId)
   const { mutate: removeLabel } = useRemoveCardLabel(boardId)
+  const { mutate: createLabel, isPending: isCreatingLabel } = useCreateLabel(boardId)
+  const { mutate: updateLabel } = useUpdateLabel(boardId)
+  const { mutate: deleteLabel } = useDeleteLabel(boardId)
 
   const [title, setTitle] = useState(card.title)
   const [description, setDescription] = useState(card.description)
   const [isEditingDesc, setIsEditingDesc] = useState(false)
   const [showLabels, setShowLabels] = useState(false)
+  const [labelView, setLabelView] = useState<"list" | "create" | "edit">("list")
+  const [editingLabel, setEditingLabel] = useState<Label | null>(null)
+  const [labelName, setLabelName] = useState("")
+  const [labelColor, setLabelColor] = useState("#6366f1")
   const [dueDate, setDueDate] = useState(card.due_date?.slice(0, 16) ?? "")
 
   const currentList = lists.find((l) => l.cards.some((c) => c.id === card.id))
@@ -72,6 +81,41 @@ export default function CardDetailModal({
     } else {
       addLabel({ cardId: card.id, labelId })
     }
+  }
+
+  const LABEL_COLORS = [
+    "#6366f1", "#8b5cf6", "#ec4899", "#f43f5e", "#f97316",
+    "#eab308", "#22c55e", "#14b8a6", "#06b6d4", "#3b82f6",
+  ]
+
+  const openCreateLabel = () => {
+    setLabelName("")
+    setLabelColor(LABEL_COLORS[0])
+    setEditingLabel(null)
+    setLabelView("create")
+  }
+
+  const openEditLabel = (label: Label) => {
+    setEditingLabel(label)
+    setLabelName(label.name)
+    setLabelColor(label.color)
+    setLabelView("edit")
+  }
+
+  const handleSaveLabel = () => {
+    if (!labelName.trim()) return
+    if (labelView === "edit" && editingLabel) {
+      updateLabel({ id: editingLabel.id, name: labelName.trim(), color: labelColor })
+    } else {
+      createLabel({ name: labelName.trim(), color: labelColor })
+    }
+    setLabelView("list")
+  }
+
+  const handleDeleteLabel = () => {
+    if (!editingLabel) return
+    deleteLabel(editingLabel.id)
+    setLabelView("list")
   }
 
   return (
@@ -219,7 +263,10 @@ export default function CardDetailModal({
               {/* Labels toggle */}
               <div className="relative">
                 <button
-                  onClick={() => setShowLabels(!showLabels)}
+                  onClick={() => {
+                    setShowLabels(!showLabels)
+                    setLabelView("list")
+                  }}
                   className="w-full flex items-center gap-2 bg-secondary border border-border rounded-lg px-3 py-2 text-sm font-medium
                              text-foreground hover:bg-secondary/80 transition-all cursor-pointer"
                 >
@@ -227,26 +274,124 @@ export default function CardDetailModal({
                   Labels
                 </button>
                 {showLabels && (
-                  <div className="absolute right-0 top-10 glass-strong rounded-lg p-3 z-10 w-48 space-y-1.5">
-                    {labels.map((label) => (
-                      <button
-                        key={label.id}
-                        onClick={() => handleLabelToggle(label.id)}
-                        className={cn(
-                          "w-full flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-left cursor-pointer transition-all",
-                          cardLabelIds.has(label.id)
-                            ? "ring-2 ring-primary"
-                            : "hover:opacity-80"
+                  <div className="absolute right-0 top-10 glass-strong rounded-lg p-3 z-10 w-56">
+                    {labelView === "list" && (
+                      <div className="space-y-1.5">
+                        <p className="text-xs font-semibold text-muted-foreground mb-2">Labels</p>
+                        {labels.map((label) => (
+                          <div key={label.id} className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => handleLabelToggle(label.id)}
+                              className={cn(
+                                "flex-1 flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-left cursor-pointer transition-all",
+                                cardLabelIds.has(label.id)
+                                  ? "ring-2 ring-primary"
+                                  : "hover:opacity-80"
+                              )}
+                              style={{ backgroundColor: label.color, color: "white" }}
+                            >
+                              {label.name}
+                            </button>
+                            <button
+                              onClick={() => openEditLabel(label)}
+                              className="text-muted-foreground hover:text-foreground cursor-pointer p-1 shrink-0"
+                            >
+                              <Pencil className="size-3" />
+                            </button>
+                          </div>
+                        ))}
+                        {labels.length === 0 && (
+                          <p className="text-xs text-muted-foreground text-center py-2">
+                            No labels yet
+                          </p>
                         )}
-                        style={{ backgroundColor: label.color, color: "white" }}
-                      >
-                        {label.name}
-                      </button>
-                    ))}
-                    {labels.length === 0 && (
-                      <p className="text-xs text-muted-foreground text-center py-2">
-                        No labels on this board
-                      </p>
+                        <button
+                          onClick={openCreateLabel}
+                          className="w-full flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium
+                                     bg-secondary border border-border text-foreground hover:bg-secondary/80
+                                     transition-all cursor-pointer mt-2"
+                        >
+                          <Plus className="size-3.5" />
+                          Create label
+                        </button>
+                      </div>
+                    )}
+
+                    {(labelView === "create" || labelView === "edit") && (
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setLabelView("list")}
+                            className="text-muted-foreground hover:text-foreground cursor-pointer p-0.5"
+                          >
+                            <ArrowLeft className="size-4" />
+                          </button>
+                          <p className="text-xs font-semibold text-muted-foreground">
+                            {labelView === "create" ? "Create label" : "Edit label"}
+                          </p>
+                        </div>
+
+                        {/* Preview */}
+                        <div
+                          className="rounded-lg px-3 py-2 text-sm text-white font-medium"
+                          style={{ backgroundColor: labelColor }}
+                        >
+                          {labelName || "Label preview"}
+                        </div>
+
+                        {/* Name input */}
+                        <input
+                          type="text"
+                          value={labelName}
+                          onChange={(e) => setLabelName(e.target.value)}
+                          placeholder="Label name"
+                          className="w-full text-foreground rounded-lg px-3 py-2 text-sm bg-secondary border border-border
+                                     placeholder:text-muted-foreground focus:outline-none"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleSaveLabel()
+                          }}
+                        />
+
+                        {/* Color picker */}
+                        <div className="flex flex-wrap gap-1.5">
+                          {LABEL_COLORS.map((c) => (
+                            <button
+                              key={c}
+                              type="button"
+                              onClick={() => setLabelColor(c)}
+                              className={cn(
+                                "size-6 rounded-md cursor-pointer transition-all",
+                                labelColor === c
+                                  ? "ring-2 ring-primary ring-offset-2 ring-offset-card scale-110"
+                                  : "hover:scale-105"
+                              )}
+                              style={{ backgroundColor: c }}
+                            />
+                          ))}
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={handleSaveLabel}
+                            disabled={!labelName.trim() || isCreatingLabel}
+                            className="flex-1 bg-primary text-primary-foreground rounded-lg px-3 py-1.5 text-sm font-semibold
+                                       hover:bg-primary/90 transition-colors disabled:opacity-50 cursor-pointer"
+                          >
+                            {labelView === "create" ? "Create" : "Save"}
+                          </button>
+                          {labelView === "edit" && (
+                            <button
+                              onClick={handleDeleteLabel}
+                              className="text-destructive hover:bg-destructive/10 rounded-lg p-1.5 cursor-pointer transition-colors"
+                              title="Delete label"
+                            >
+                              <Trash2 className="size-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     )}
                   </div>
                 )}

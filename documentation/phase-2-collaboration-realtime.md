@@ -268,6 +268,8 @@ use-board-socket.ts   → useBoardSocket(boardId)
 - [ ] Owner/Admin can send email invitations with role assignment
 - [ ] Invitees can accept via signed link (new or existing users)
 - [ ] Pending invitations can be resent or revoked
+- [ ] Workspace settings page (`/w/:slug/settings`) with member + invitation management
+- [ ] Card member assignment UI in card detail modal (deferred from Phase 1)
 - [ ] Comments can be added, edited, deleted on cards
 - [ ] @mentions in comments trigger notifications
 - [ ] Checklists with toggleable items and progress bar work on cards
