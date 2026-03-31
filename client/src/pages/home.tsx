@@ -7,15 +7,23 @@ export default function HomePage() {
   const { data: workspaces, isLoading } = useWorkspaces()
 
   return (
-    <div className="p-8">
-      <motion.h2
-        initial={{ opacity: 0, y: 10 }}
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
-        className="text-2xl font-bold text-foreground mb-6"
+        className="bg-card/80 backdrop-blur px-6 py-3 flex items-center gap-4 border-b border-border/30"
       >
-        Your Workspaces
-      </motion.h2>
+        <Layers className="size-5 text-primary" strokeWidth={2} />
+        <h2 className="text-lg font-bold text-foreground">Your Workspaces</h2>
+        {workspaces && !isLoading && (
+          <span className="text-sm text-muted-foreground">{workspaces.length}</span>
+        )}
+      </motion.div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto p-8">
+        <div className="max-w-6xl mx-auto">
 
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -24,7 +32,7 @@ export default function HomePage() {
               key={i}
               initial={{ opacity: 0 }}
               animate={{ opacity: 0.4 }}
-              transition={{ duration: 0.5, delay: i * 0.08 }}
+              transition={{ duration: 0.5, delay: 0.2 + i * 0.04 }}
               className="rounded-2xl glass-sm p-6 h-32 animate-pulse"
             />
           ))}
@@ -34,14 +42,16 @@ export default function HomePage() {
           {workspaces.map((ws, i) => (
             <motion.div
               key={ws.id}
-              initial={{ opacity: 0, y: 8 }}
+              initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.35, delay: 0.1 + i * 0.06, ease: [0.25, 0.46, 0.45, 0.94] }}
-              whileHover={{ y: -3, transition: { duration: 0.2 } }}
+              transition={{ duration: 0.3, delay: 0.2 + i * 0.04, ease: [0.25, 0.46, 0.45, 0.94] }}
             >
               <Link
                 to={`/w/${ws.slug}`}
-                className="block rounded-2xl glass-sm p-6 transition-shadow duration-200 group hover:shadow-md"
+                className="block rounded-2xl p-6 group
+                           bg-card/60 border border-transparent
+                           hover:bg-card hover:border-border hover:shadow-sm
+                           transition-all duration-150"
               >
                   <div className="flex items-start justify-between">
                     <div className="rounded-xl p-3 bg-primary/10">
@@ -88,6 +98,8 @@ export default function HomePage() {
             </Link>
           </motion.div>
         )}
+        </div>
+      </div>
     </div>
   )
 }

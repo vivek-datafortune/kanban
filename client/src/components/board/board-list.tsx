@@ -57,7 +57,10 @@ export default function BoardList({ list, index, boardId, onCardClick }: BoardLi
     <Draggable draggableId={list.id} index={index}>
       {(provided, snapshot) => {
         const child = (
-          <div
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.2 + index * 0.04, ease: [0.25, 0.46, 0.45, 0.94] }}
             ref={provided.innerRef}
             {...provided.draggableProps}
             className={cn(
@@ -207,7 +210,7 @@ export default function BoardList({ list, index, boardId, onCardClick }: BoardLi
               )}
             </AnimatePresence>
           </div>
-        </div>
+        </motion.div>
         )
 
         return snapshot.isDragging ? createPortal(child, document.body) : child

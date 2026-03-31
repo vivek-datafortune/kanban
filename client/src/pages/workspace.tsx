@@ -40,39 +40,40 @@ export default function WorkspacePage() {
   }
 
   return (
-    <div className="p-8 max-w-6xl mx-auto">
+    <div className="flex flex-col h-full">
       {/* Header */}
       <motion.div
-        initial={{ opacity: 0, y: 12 }}
+        initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
-        className="flex items-center justify-between mb-10"
+        className="bg-card/80 backdrop-blur px-6 py-3 flex items-center gap-4 border-b border-border/30"
       >
-        <div className="flex items-center gap-4">
-          <BackButton to="/" label="Home" />
-          <div className="size-12 rounded-xl bg-primary/10 flex items-center justify-center">
-            <span className="text-xl font-bold text-primary">
-              {(workspace?.name?.[0] ?? "W").toUpperCase()}
-            </span>
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold text-foreground tracking-tight">
-              {workspace?.name || "Workspace"}
-            </h2>
-            {workspace?.description && (
-              <p className="text-sm text-muted-foreground mt-0.5">{workspace.description}</p>
-            )}
-          </div>
+        <BackButton to="/" label="Home" />
+        <div className="size-8 rounded-lg bg-primary/10 flex items-center justify-center">
+          <span className="text-sm font-bold text-primary">
+            {(workspace?.name?.[0] ?? "W").toUpperCase()}
+          </span>
         </div>
-        <button
-          onClick={() => setShowCreateForm(true)}
-          className="bg-primary text-primary-foreground rounded-lg px-4 py-2.5 text-sm font-semibold
-                     hover:bg-primary/90 transition-colors cursor-pointer flex items-center gap-2"
-        >
-          <Plus className="size-4" />
-          New Board
-        </button>
+        <div>
+          <h2 className="text-lg font-bold text-foreground">{workspace?.name || "Workspace"}</h2>
+          {workspace?.description && (
+            <p className="text-xs text-muted-foreground">{workspace.description}</p>
+          )}
+        </div>
+        <div className="ml-auto">
+          <button
+            onClick={() => setShowCreateForm(true)}
+            className="bg-primary text-primary-foreground rounded-lg px-4 py-2.5 text-sm font-semibold
+                       hover:bg-primary/90 transition-colors cursor-pointer flex items-center gap-2"
+          >
+            <Plus className="size-4" />
+            New Board
+          </button>
+        </div>
       </motion.div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto p-8">
+        <div className="max-w-6xl mx-auto">
 
       {/* Starred boards — horizontal pinned row */}
       <AnimatePresence>
@@ -232,6 +233,8 @@ export default function WorkspacePage() {
             </AnimatePresence>
           </div>
       </motion.div>
+        </div>
+      </div>
     </div>
   )
 }
@@ -253,7 +256,6 @@ function BoardCard({ board, slug, index, onToggleStar }: BoardCardProps) {
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, delay: 0.2 + index * 0.04, ease: [0.25, 0.46, 0.45, 0.94] }}
-      whileHover={{ y: -2 }}
     >
       <Link
         to={`/w/${slug}/b/${board.id}`}
