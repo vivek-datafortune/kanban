@@ -272,7 +272,7 @@ use-board-socket.ts   → useBoardSocket(boardId)
 - [ ] Card member assignment UI in card detail modal (deferred from Phase 1)
 - [ ] Comments can be added, edited, deleted on cards
 - [ ] @mentions in comments trigger notifications
-- [ ] Checklists with toggleable items and progress bar work on cards
+- [x] Checklists with toggleable items and progress bar work on cards
 - [ ] Activity log records all card changes with actor and timestamp
 - [ ] WebSocket delivers real-time updates to all users on the same board
 - [ ] Presence indicators show who's viewing a board

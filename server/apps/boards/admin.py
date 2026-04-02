@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Board, Card, CardLabel, CardMember, Label, List, StarredBoard
+from .models import Board, Card, CardLabel, CardMember, ChecklistItem, Label, List, StarredBoard
 
 
 class ListInline(admin.TabularInline):
@@ -28,7 +28,7 @@ class ListAdmin(admin.ModelAdmin):
 
 @admin.register(Card)
 class CardAdmin(admin.ModelAdmin):
-    list_display = ("title", "list", "position", "is_completed", "due_date")
+    list_display = ("title", "list", "position", "due_date")
     search_fields = ("title",)
 
 
@@ -40,3 +40,4 @@ class LabelAdmin(admin.ModelAdmin):
 admin.site.register(StarredBoard)
 admin.site.register(CardLabel)
 admin.site.register(CardMember)
+admin.site.register(ChecklistItem)

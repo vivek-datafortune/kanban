@@ -89,7 +89,6 @@ class Card(models.Model):
     position = models.FloatField()
     due_date = models.DateTimeField(null=True, blank=True)
     start_date = models.DateTimeField(null=True, blank=True)
-    is_completed = models.BooleanField(default=False)
     labels = models.ManyToManyField(Label, through="CardLabel", blank=True)
     members = models.ManyToManyField(
         settings.AUTH_USER_MODEL, through="CardMember", blank=True
@@ -127,3 +126,40 @@ class CardMember(models.Model):
 
     class Meta:
         unique_together = ("card", "user")
+
+
+class ChecklistItem(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    card = models.ForeignKey(Card, on_delete=models.CASCADE, related_name="checklist_items")
+    text = models.CharField(max_length=500)
+    is_completed = models.BooleanField(default=False)
+    position = models.FloatField(default=65536)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["position", "created_at"]
+
+    def __str__(self):
+        return f"{'✓' if self.is_completed else '○'} {self.text}"
+
+
+class Activity(models.Model):
+    """Audit log entry for board/card actions."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    board = models.ForeignKey(Board, on_delete=models.CASCADE, related_name="activities")
+    card = models.ForeignKey(
+        Card, on_delete=models.SET_NULL, null=True, blank=True, related_name="activities"
+    )
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="activities"
+    )
+    action = models.CharField(max_length=50)
+    details = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.actor} → {self.action} on {self.card or self.board}"

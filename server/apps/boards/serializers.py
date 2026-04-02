@@ -2,7 +2,7 @@ from rest_framework import serializers
 
 from apps.users.serializers import UserSerializer
 
-from .models import Board, Card, CardLabel, CardMember, Label, List, StarredBoard
+from .models import Board, Card, CardLabel, CardMember, ChecklistItem, Label, List, StarredBoard, Activity
 
 
 class LabelSerializer(serializers.ModelSerializer):
@@ -20,17 +20,26 @@ class CardMemberSerializer(serializers.ModelSerializer):
         fields = ("id", "user")
 
 
+class ChecklistItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ChecklistItem
+        fields = ("id", "card", "text", "is_completed", "position", "created_at")
+        read_only_fields = ("id", "card", "created_at")
+
+
 class CardSerializer(serializers.ModelSerializer):
     labels = LabelSerializer(many=True, read_only=True)
     members = UserSerializer(many=True, read_only=True)
     created_by = UserSerializer(read_only=True)
+    checklist_items = ChecklistItemSerializer(many=True, read_only=True)
 
     class Meta:
         model = Card
         fields = (
             "id", "list", "title", "description", "position",
-            "due_date", "start_date", "is_completed",
+            "due_date", "start_date",
             "labels", "members", "created_by",
+            "checklist_items",
             "created_at", "updated_at",
         )
         read_only_fields = ("id", "created_by", "created_at", "updated_at")
@@ -140,3 +149,13 @@ class BoardCreateSerializer(serializers.ModelSerializer):
         validated_data["created_by"] = self.context["request"].user
         validated_data["workspace_id"] = self.context["workspace_id"]
         return super().create(validated_data)
+
+
+class ActivitySerializer(serializers.ModelSerializer):
+    actor = UserSerializer(read_only=True)
+    card_title = serializers.CharField(source="card.title", read_only=True, default=None)
+
+    class Meta:
+        model = Activity
+        fields = ("id", "board", "card", "card_title", "actor", "action", "details", "created_at")
+        read_only_fields = fields

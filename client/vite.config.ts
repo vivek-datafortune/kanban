@@ -34,6 +34,12 @@ export default defineConfig({
         target: 'http://web:8000',
         changeOrigin: true,
       },
+      // forward WebSocket connections to Django/Daphne
+      '/ws': {
+        target: 'http://web:8000',
+        changeOrigin: true,
+        ws: true,
+      },
     },
   },
 })

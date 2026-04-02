@@ -31,6 +31,15 @@ export interface List {
   created_at: string
 }
 
+export interface ChecklistItem {
+  id: string
+  card: string
+  text: string
+  is_completed: boolean
+  position: number
+  created_at: string
+}
+
 export interface Card {
   id: string
   list: string
@@ -39,10 +48,38 @@ export interface Card {
   position: number
   due_date: string | null
   start_date: string | null
-  is_completed: boolean
   labels: Label[]
   members: User[]
+  checklist_items: ChecklistItem[]
   created_by: User
   created_at: string
   updated_at: string
+}
+
+export type ActivityAction =
+  | "card.created"
+  | "card.updated"
+  | "card.moved"
+  | "card.deleted"
+  | "label.added"
+  | "label.removed"
+  | "member.added"
+  | "member.removed"
+
+export interface Activity {
+  id: string
+  board: string
+  card: string | null
+  card_title: string | null
+  actor: User
+  action: ActivityAction
+  details: Record<string, unknown>
+  created_at: string
+}
+
+export interface PaginatedResponse<T> {
+  count: number
+  next: string | null
+  previous: string | null
+  results: T[]
 }

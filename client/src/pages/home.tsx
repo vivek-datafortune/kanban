@@ -45,10 +45,11 @@ export default function HomePage() {
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, delay: 0.2 + i * 0.04, ease: [0.25, 0.46, 0.45, 0.94] }}
+              className="h-full"
             >
               <Link
                 to={`/w/${ws.slug}`}
-                className="block rounded-2xl p-6 group
+                className="flex flex-col h-full rounded-2xl p-6 group
                            bg-card/60 border border-transparent
                            hover:bg-card hover:border-border hover:shadow-sm
                            transition-all duration-150"
@@ -60,11 +61,9 @@ export default function HomePage() {
                     <ArrowRight className="size-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity mt-2" />
                   </div>
                   <h3 className="text-lg font-bold text-foreground mt-4">{ws.name}</h3>
-                  {ws.description && (
-                    <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                      {ws.description}
-                    </p>
-                  )}
+                  <p className="text-sm text-muted-foreground mt-1 line-clamp-2 flex-1">
+                    {ws.description || ""}
+                  </p>
                   <div className="flex items-center gap-3 mt-3 text-xs text-muted-foreground">
                     <span className="capitalize rounded-lg px-2 py-1 bg-secondary text-xs">
                       {ws.role}

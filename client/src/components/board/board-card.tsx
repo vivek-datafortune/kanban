@@ -1,6 +1,6 @@
 import { createPortal } from "react-dom"
 import { Draggable } from "@hello-pangea/dnd"
-import { Clock, CheckCircle2, Calendar } from "lucide-react"
+import { Clock, Calendar } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { Card } from "@/types/board"
 
@@ -10,11 +10,14 @@ interface BoardCardProps {
   onClick?: () => void
 }
 
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim()
+}
+
 export default function BoardCard({ card, index, onClick }: BoardCardProps) {
-  const hasDescription = !!card.description?.trim()
-  const truncatedDesc = card.description?.trim().length > 80
-    ? card.description.trim().slice(0, 80) + "…"
-    : card.description?.trim()
+  const plainDesc = card.description ? stripHtml(card.description) : ""
+  const hasDescription = !!plainDesc
+  const truncatedDesc = plainDesc.length > 80 ? plainDesc.slice(0, 80) + "…" : plainDesc
 
   return (
     <Draggable draggableId={card.id} index={index}>
@@ -62,14 +65,12 @@ export default function BoardCard({ card, index, onClick }: BoardCardProps) {
             <span
               className={cn(
                 "inline-flex items-center gap-1 text-[11px] font-medium rounded-md px-1.5 py-0.5",
-                card.is_completed
-                  ? "text-emerald-600 dark:text-emerald-400 bg-emerald-500/10"
-                  : new Date(card.due_date) < new Date()
-                    ? "text-red-500 dark:text-red-400 bg-red-500/10"
-                    : "text-muted-foreground bg-secondary"
+                new Date(card.due_date) < new Date()
+                  ? "text-red-500 dark:text-red-400 bg-red-500/10"
+                  : "text-muted-foreground bg-secondary"
               )}
             >
-              {card.is_completed ? <CheckCircle2 className="size-3" /> : <Clock className="size-3" />}
+              <Clock className="size-3" />
               {new Date(card.due_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
             </span>
           )}

@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { Plus, Lock, Globe, X, Pin, Users } from "lucide-react"
 import { useWorkspace } from "@/hooks/use-workspaces"
 import { useBoards, useCreateBoard, useStarBoard } from "@/hooks/use-boards"
+import { useWorkspaceSocket } from "@/hooks/use-workspace-socket"
 import BackButton from "@/components/ui/back-button"
 import MembersModal from "@/components/workspace/members-modal"
 import { cn } from "@/lib/utils"
@@ -19,6 +20,7 @@ export default function WorkspacePage() {
   const { data: boards, isLoading } = useBoards(slug!)
   const { mutate: createBoard, isPending: isCreating } = useCreateBoard(slug!)
   const { mutate: toggleStar } = useStarBoard()
+  useWorkspaceSocket(slug)
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [newTitle, setNewTitle] = useState("")
   const [newColor, setNewColor] = useState(BOARD_COLORS[0])

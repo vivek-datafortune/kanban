@@ -2,7 +2,7 @@ Let break the bigger task into below phases. Let me drive you each and every sec
 
 
 
-- Your first task convert this md into actual todo for you to chech if completed. then start with the question ` What is you suggestion`
+- Your first task convert this md into actual todo for you to chech if completed. then start with the
 
 
 TOD 1:  Setup infra first like 

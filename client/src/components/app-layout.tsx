@@ -22,7 +22,7 @@ export default function AppLayout() {
   ]
 
   return (
-    <div className="min-h-screen bg-glass-bg flex">
+    <div className="h-full bg-glass-bg flex">
       {/* Sidebar */}
       <motion.aside
         initial={{ x: -20, opacity: 0 }}

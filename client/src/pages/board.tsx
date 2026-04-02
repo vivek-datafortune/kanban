@@ -6,10 +6,12 @@ import { Pin, MoreHorizontal, Plus } from "lucide-react"
 import { useBoard } from "@/hooks/use-boards"
 import { useMoveCard } from "@/hooks/use-cards"
 import { useCreateList, useUpdateList } from "@/hooks/use-lists"
+import { useBoardSocket, type PresenceUser } from "@/hooks/use-board-socket"
 import type { List } from "@/types/board"
 import { cn } from "@/lib/utils"
 import BackButton from "@/components/ui/back-button"
 import BoardList from "@/components/board/board-list"
+import BoardPresence from "@/components/board/board-presence"
 
 export default function BoardPage() {
   const { slug, boardId } = useParams<{ slug: string; boardId: string }>()
@@ -18,6 +20,13 @@ export default function BoardPage() {
   const { mutate: moveCard } = useMoveCard(boardId!)
   const { mutate: createList, isPending: isCreatingList } = useCreateList(boardId!)
   const { mutate: updateList } = useUpdateList(boardId!)
+
+  const [presenceUsers, setPresenceUsers] = useState<PresenceUser[]>([])
+  useBoardSocket(
+    boardId,
+    setPresenceUsers,
+    () => navigate(slug ? `/w/${slug}` : "/"),
+  )
 
   const [showAddList, setShowAddList] = useState(false)
   const [newListTitle, setNewListTitle] = useState("")
@@ -181,6 +190,7 @@ export default function BoardPage() {
         <button className="text-muted-foreground hover:text-primary transition-colors cursor-pointer">
           <Pin className={cn("size-4", board.is_starred && "fill-primary text-primary")} />
         </button>
+        <BoardPresence users={presenceUsers} />
         <div className="ml-auto">
           <button className="text-muted-foreground hover:text-foreground cursor-pointer p-2">
             <MoreHorizontal className="size-5" />

@@ -1,13 +1,14 @@
 import { useParams, useNavigate } from "react-router-dom"
 import { motion } from "framer-motion"
+import { MessageSquare, Paperclip, Calendar, User as UserIcon, LayoutList } from "lucide-react"
 import { useBoard } from "@/hooks/use-boards"
-import { useUpdateCard, useDeleteCard } from "@/hooks/use-cards"
+import { useUpdateCard } from "@/hooks/use-cards"
+import { useWorkspace } from "@/hooks/use-workspaces"
+import { useBoardSocket } from "@/hooks/use-board-socket"
 import BackButton from "@/components/ui/back-button"
 import CardHeader from "@/components/card/card-header"
 import CardDescription from "@/components/card/card-description"
-import CardLabels from "@/components/card/card-labels"
-import CardMembers from "@/components/card/card-members"
-import CardSidebar from "@/components/card/card-sidebar"
+import CardRightPanel from "@/components/card/card-sidebar"
 import type { Card, List } from "@/types/board"
 
 function findCard(lists: List[] | undefined, cardId: string): { card: Card | null; currentList: List | null } {
@@ -19,19 +20,74 @@ function findCard(lists: List[] | undefined, cardId: string): { card: Card | nul
   return { card: null, currentList: null }
 }
 
+function Section({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, delay, ease: [0.25, 0.46, 0.45, 0.94] }}
+      className="bg-card border border-border rounded-xl p-5"
+    >
+      {children}
+    </motion.div>
+  )
+}
+
+function ComingSoonSection({
+  icon: Icon,
+  title,
+  description,
+  delay = 0,
+}: {
+  icon: typeof MessageSquare
+  title: string
+  description: string
+  delay?: number
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, delay, ease: [0.25, 0.46, 0.45, 0.94] }}
+      className="bg-card/50 border border-dashed border-border rounded-xl p-5 opacity-60"
+    >
+      <div className="flex items-center gap-3">
+        <div className="size-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+          <Icon className="size-4.5 text-primary" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <h4 className="text-sm font-semibold text-foreground">{title}</h4>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+              Coming Soon
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+        </div>
+      </div>
+    </motion.div>
+  )
+}
+
+function formatDate(dateStr: string) {
+  return new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+}
+
 export default function CardPage() {
   const { slug, boardId, cardId } = useParams<{ slug: string; boardId: string; cardId: string }>()
   const navigate = useNavigate()
   const { data: board, isLoading } = useBoard(boardId!)
+  const { data: workspace } = useWorkspace(slug!)
   const { mutate: updateCard } = useUpdateCard(boardId!)
-  const { mutate: deleteCard } = useDeleteCard(boardId!)
+
+  // Keep the board WebSocket alive on the card detail page too
+  useBoardSocket(
+    boardId,
+    undefined,
+    () => navigate(slug ? `/w/${slug}` : "/"),
+  )
 
   const { card, currentList } = findCard(board?.lists, cardId!)
-
-  const handleDelete = () => {
-    deleteCard(cardId!)
-    navigate(`/w/${slug}/b/${boardId}`)
-  }
 
   if (isLoading) {
     return (
@@ -49,10 +105,7 @@ export default function CardPage() {
       <div className="h-full flex items-center justify-center">
         <div className="glass-sm rounded-2xl p-8 text-center">
           <p className="text-foreground font-bold text-lg">Card not found</p>
-          <button
-            onClick={() => navigate(`/w/${slug}/b/${boardId}`)}
-            className="mt-4 text-sm text-primary hover:underline cursor-pointer"
-          >
+          <button onClick={() => navigate(`/w/${slug}/b/${boardId}`)} className="mt-4 text-sm text-primary hover:underline cursor-pointer">
             Back to board
           </button>
         </div>
@@ -62,11 +115,11 @@ export default function CardPage() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
+      {/* Top bar */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-card/80 backdrop-blur px-6 py-3 flex items-center gap-4 border-b border-border/30"
+        className="bg-card/80 backdrop-blur-sm px-6 py-3 flex items-center gap-4 border-b border-border/30"
       >
         <BackButton to={`/w/${slug}/b/${boardId}`} label={board?.title ?? "Board"} />
         <CardHeader
@@ -76,41 +129,84 @@ export default function CardPage() {
         />
       </motion.div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-8">
-        <div className="max-w-4xl mx-auto flex gap-8">
-          {/* Main */}
-          <motion.div
-            key={cardId}
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.1, ease: [0.25, 0.46, 0.45, 0.94] }}
-            className="flex-1 space-y-6 min-w-0"
-          >
-            <CardLabels labels={card.labels} />
-            <CardDescription
-              description={card.description}
-              onSave={(description) => updateCard({ id: card.id, description })}
-            />
-            <CardMembers members={card.members} />
-          </motion.div>
+      {/* Body */}
+      <div className="flex-1 overflow-y-auto h-full">
+        <div className="h-full max-w-6xl mx-auto p-6 lg:p-8 flex gap-6 lg:gap-8 items-start">
 
-          {/* Sidebar */}
-          <motion.div
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.15, ease: [0.25, 0.46, 0.45, 0.94] }}
-            className="sticky top-0 self-start"
-          >
-            <CardSidebar
-              card={card}
-              boardId={boardId!}
-              labels={board?.labels ?? []}
-              onDelete={handleDelete}
-            />
-          </motion.div>
+            {/* ── Main column ── */}
+            <div className="flex-1 min-w-0 space-y-4 overflow-y-auto h-full scrollbar-hide">
+              {/* Metadata bar */}
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: 0.05, ease: [0.25, 0.46, 0.45, 0.94] }}
+                className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground"
+              >
+                <div className="flex items-center gap-1.5">
+                  <LayoutList className="size-3.5" />
+                  <span>in <span className="font-semibold text-foreground">{currentList.title}</span></span>
+                </div>
+                {card.created_by && (
+                  <div className="flex items-center gap-1.5">
+                    <UserIcon className="size-3.5" />
+                    <span>
+                      by <span className="font-semibold text-foreground">
+                        {card.created_by.first_name || card.created_by.email}
+                      </span>
+                    </span>
+                  </div>
+                )}
+                <div className="flex items-center gap-1.5">
+                  <Calendar className="size-3.5" />
+                  <span>{formatDate(card.created_at)}</span>
+                </div>
+              </motion.div>
+
+              {/* Description */}
+              <Section delay={0.1}>
+                <CardDescription
+                  description={card.description}
+                  onSave={(description) => updateCard({ id: card.id, description })}
+                />
+              </Section>
+
+              {/* Attachments */}
+              <ComingSoonSection
+                icon={Paperclip}
+                title="Attachments"
+                description="Upload files, images, and documents directly to this card."
+                delay={0.15}
+              />
+
+              {/* Comments */}
+              <ComingSoonSection
+                icon={MessageSquare}
+                title="Comments"
+                description="Discuss this card with your team. Add comments, mentions, and reactions."
+                delay={0.2}
+              />
+            </div>
+
+            {/* ── Right panel (accordion) ── */}
+            <motion.div
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.08, ease: [0.25, 0.46, 0.45, 0.94] }}
+              className="overflow-y-auto h-full scrollbar-hide"
+            >
+              <CardRightPanel
+                card={card}
+                boardId={boardId!}
+                lists={board?.lists ?? []}
+                labels={board?.labels ?? []}
+                workspaceSlug={slug!}
+                workspaceRole={workspace?.role ?? "member"}
+              />
+            </motion.div>
+
         </div>
       </div>
     </div>
   )
 }
+

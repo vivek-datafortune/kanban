@@ -57,4 +57,26 @@ urlpatterns = [
         views.CardMemberView.as_view(),
         name="card-member-detail",
     ),
+    # Activity
+    path(
+        "cards/<uuid:pk>/activity/",
+        views.CardActivityView.as_view(),
+        name="card-activity",
+    ),
+    path(
+        "boards/<uuid:pk>/activity/",
+        views.BoardActivityView.as_view(),
+        name="board-activity",
+    ),
+    # Checklist
+    path(
+        "cards/<uuid:pk>/checklist/",
+        views.ChecklistItemListCreateView.as_view(),
+        name="checklist-list",
+    ),
+    path(
+        "checklist/<uuid:pk>/",
+        views.ChecklistItemDetailView.as_view(),
+        name="checklist-detail",
+    ),
 ]

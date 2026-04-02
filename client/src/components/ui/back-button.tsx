@@ -33,11 +33,11 @@ export default function BackButton({ to, label = "Back", className }: BackButton
         <ArrowLeft className="size-[18px]" />
       </motion.span>
       <motion.span
-        className="text-sm font-medium overflow-hidden"
-        initial={{ width: 0, opacity: 0 }}
+        className="text-sm font-medium overflow-hidden whitespace-nowrap"
+        initial={{ maxWidth: 0, opacity: 0 }}
         variants={{
-          hover: { width: "auto", opacity: 1 },
-          tap: { width: "auto", opacity: 1 },
+          hover: { maxWidth: 200, opacity: 1 },
+          tap: { maxWidth: 200, opacity: 1 },
         }}
         transition={{ type: "spring", stiffness: 400, damping: 25 }}
       >
