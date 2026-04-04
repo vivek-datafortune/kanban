@@ -21,6 +21,8 @@ urlpatterns = [
     path("api/", include("apps.boards.urls")),
     # Invitation accept (top-level — invitee doesn't know the workspace slug)
     path("api/invitations/accept/", InvitationAcceptView.as_view(), name="invitation-accept"),
+    # Notifications
+    path("api/notifications/", include("apps.notifications.urls")),
 ]
 
 if settings.DEBUG:

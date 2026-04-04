@@ -89,3 +89,25 @@ export function useDeleteChecklistItem(boardId: string, cardId: string) {
     onSettled: () => queryClient.invalidateQueries({ queryKey: ["board", boardId] }),
   })
 }
+
+export function useReorderChecklistItem(boardId: string, cardId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, position }: { id: string; position: number }) =>
+      api.patch<ChecklistItem>(`/checklist/${id}/`, { position }),
+    onMutate: async ({ id, position }) => {
+      await queryClient.cancelQueries({ queryKey: ["board", boardId] })
+      const previous = queryClient.getQueryData(["board", boardId])
+      queryClient.setQueryData(["board", boardId], (old: Board | undefined) =>
+        updateItemInCache(old, cardId, (items) =>
+          items.map((i) => (i.id === id ? { ...i, position } : i)),
+        ),
+      )
+      return { previous }
+    },
+    onError: (_err, _vars, ctx) => {
+      queryClient.setQueryData(["board", boardId], ctx?.previous)
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["board", boardId] }),
+  })
+}

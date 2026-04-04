@@ -9,6 +9,7 @@ import BackButton from "@/components/ui/back-button"
 import CardHeader from "@/components/card/card-header"
 import CardDescription from "@/components/card/card-description"
 import CardRightPanel from "@/components/card/card-sidebar"
+import CardComments from "@/components/card/card-comments"
 import type { Card, List } from "@/types/board"
 
 function findCard(lists: List[] | undefined, cardId: string): { card: Card | null; currentList: List | null } {
@@ -179,12 +180,9 @@ export default function CardPage() {
               />
 
               {/* Comments */}
-              <ComingSoonSection
-                icon={MessageSquare}
-                title="Comments"
-                description="Discuss this card with your team. Add comments, mentions, and reactions."
-                delay={0.2}
-              />
+              <Section delay={0.2}>
+                <CardComments cardId={card.id} workspaceSlug={slug!} />
+              </Section>
             </div>
 
             {/* ── Right panel (accordion) ── */}

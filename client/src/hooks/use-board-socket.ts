@@ -212,6 +212,16 @@ export function useBoardSocket(
           presenceCallbackRef.current?.([...presenceRef.current.values()])
           break
         }
+
+        case "comment.added":
+        case "comment.updated":
+        case "comment.deleted": {
+          // Invalidate the comments query for the affected card
+          queryClient.invalidateQueries({
+            queryKey: ["comments", payload.card_id as string],
+          })
+          break
+        }
       }
     }
 

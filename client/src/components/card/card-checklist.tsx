@@ -1,7 +1,8 @@
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useMemo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Check, Plus, Trash2 } from "lucide-react"
-import { useCreateChecklistItem, useToggleChecklistItem, useUpdateChecklistItem, useDeleteChecklistItem } from "@/hooks/use-checklist"
+import { Check, Plus, Trash2, GripVertical } from "lucide-react"
+import { DragDropContext, Droppable, Draggable, type DropResult, type DraggableProvided } from "@hello-pangea/dnd"
+import { useCreateChecklistItem, useToggleChecklistItem, useUpdateChecklistItem, useDeleteChecklistItem, useReorderChecklistItem } from "@/hooks/use-checklist"
 import { cn } from "@/lib/utils"
 import type { ChecklistItem } from "@/types/board"
 
@@ -33,10 +34,12 @@ function ItemRow({
   item,
   boardId,
   cardId,
+  provided,
 }: {
   item: ChecklistItem
   boardId: string
   cardId: string
+  provided: DraggableProvided
 }) {
   const { mutate: toggle } = useToggleChecklistItem(boardId, cardId)
   const { mutate: update } = useUpdateChecklistItem(boardId, cardId)
@@ -55,13 +58,18 @@ function ItemRow({
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: -3 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.14, ease: "easeOut" }}
+    <div
+      ref={provided.innerRef}
+      {...provided.draggableProps}
       className="group flex items-center gap-2.5 py-1"
     >
+      {/* Drag handle */}
+      <div
+        {...provided.dragHandleProps}
+        className="shrink-0 text-muted-foreground/30 hover:text-muted-foreground opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing transition-opacity"
+      >
+        <GripVertical className="size-3.5" />
+      </div>
       {/* Checkbox */}
       <button
         type="button"
@@ -116,17 +124,43 @@ function ItemRow({
           <Trash2 className="size-3" />
         </button>
       )}
-    </motion.div>
+    </div>
   )
 }
 
 export default function CardChecklist({ cardId, boardId, items }: Props) {
   const { mutate: create, isPending } = useCreateChecklistItem(boardId, cardId)
+  const { mutate: reorder } = useReorderChecklistItem(boardId, cardId)
   const [adding, setAdding] = useState(false)
   const [text, setText] = useState("")
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { if (adding) inputRef.current?.focus() }, [adding])
+
+  const sortedItems = useMemo(
+    () => [...items].sort((a, b) => a.position - b.position),
+    [items],
+  )
+
+  function handleDragEnd(result: DropResult) {
+    const { source, destination } = result
+    if (!destination || source.index === destination.index) return
+    const reordered = [...sortedItems]
+    const [moved] = reordered.splice(source.index, 1)
+    reordered.splice(destination.index, 0, moved)
+    const newIndex = destination.index
+    let newPosition: number
+    if (reordered.length === 1) {
+      newPosition = 65536
+    } else if (newIndex === 0) {
+      newPosition = reordered[1].position / 2
+    } else if (newIndex === reordered.length - 1) {
+      newPosition = reordered[newIndex - 1].position + 65536
+    } else {
+      newPosition = (reordered[newIndex - 1].position + reordered[newIndex + 1].position) / 2
+    }
+    reorder({ id: moved.id, position: newPosition })
+  }
 
   function submit() {
     const trimmed = text.trim()
@@ -134,19 +168,37 @@ export default function CardChecklist({ cardId, boardId, items }: Props) {
     setAdding(false)
   }
 
-  const done = items.filter((i) => i.is_completed).length
+  const done = sortedItems.filter((i) => i.is_completed).length
 
   return (
     <div className="-mx-4 -mt-2 -mb-4 px-4 pt-2 pb-3">
-      {items.length > 0 && <ProgressBar total={items.length} done={done} />}
+      {sortedItems.length > 0 && <ProgressBar total={sortedItems.length} done={done} />}
 
-      <div className="space-y-0.5">
-        <AnimatePresence initial={false}>
-          {items.map((item) => (
-            <ItemRow key={item.id} item={item} boardId={boardId} cardId={cardId} />
-          ))}
-        </AnimatePresence>
-      </div>
+      <DragDropContext onDragEnd={handleDragEnd}>
+        <Droppable droppableId="checklist-items">
+          {(droppableProvided) => (
+            <div
+              ref={droppableProvided.innerRef}
+              {...droppableProvided.droppableProps}
+              className="space-y-0.5"
+            >
+              {sortedItems.map((item, index) => (
+                <Draggable key={item.id} draggableId={item.id} index={index}>
+                  {(draggableProvided) => (
+                    <ItemRow
+                      item={item}
+                      boardId={boardId}
+                      cardId={cardId}
+                      provided={draggableProvided}
+                    />
+                  )}
+                </Draggable>
+              ))}
+              {droppableProvided.placeholder}
+            </div>
+          )}
+        </Droppable>
+      </DragDropContext>
 
       {/* Add item */}
       <AnimatePresence mode="wait">

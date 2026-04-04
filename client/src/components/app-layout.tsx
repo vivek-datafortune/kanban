@@ -5,6 +5,7 @@ import { useStore } from "@/store/app.store"
 import { useLogout, useCurrentUser } from "@/hooks/use-auth"
 import { useTheme, type Theme } from "@/hooks/use-theme"
 import { useWorkspaces } from "@/hooks/use-workspaces"
+import NotificationBell from "@/components/notification-bell"
 import { cn } from "@/lib/utils"
 
 export default function AppLayout() {
@@ -101,6 +102,7 @@ export default function AppLayout() {
             <span className="font-medium text-sm text-foreground truncate flex-1">
               {user?.first_name || user?.email || "User"}
             </span>
+            <NotificationBell />
             <button
               onClick={() => logout()}
               disabled={isPending}

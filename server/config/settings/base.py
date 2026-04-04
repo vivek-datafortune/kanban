@@ -52,6 +52,7 @@ LOCAL_APPS = [
     "apps.workspaces",
     "apps.boards",
     "apps.realtime",
+    "apps.notifications",
 ]
 
 INSTALLED_APPS = ["daphne"] + DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

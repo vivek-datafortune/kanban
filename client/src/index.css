@@ -153,6 +153,50 @@ body {
   box-shadow: none;
 }
 
+/* Inline mention chips inside contentEditable comment boxes */
+.mention-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: hsl(var(--primary) / 0.12);
+  color: hsl(var(--primary));
+  font-size: 0.82em;
+  font-weight: 500;
+  border-radius: 9999px;
+  padding: 1px 4px 1px 6px;
+  margin: 0 1px;
+  vertical-align: middle;
+  border: 1px solid hsl(var(--primary) / 0.25);
+  user-select: none;
+  cursor: default;
+  white-space: nowrap;
+  line-height: 1.5;
+}
+
+.mention-chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  cursor: pointer;
+  margin-left: 2px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: inherit;
+  opacity: 0.55;
+  transition: background 0.15s, opacity 0.15s;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+.mention-chip-remove:hover {
+  background: hsl(var(--primary) / 0.2);
+  opacity: 1;
+}
+
 /* Thin, themed scrollbars */
 * {
   scrollbar-width: thin;

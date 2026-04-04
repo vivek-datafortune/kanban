@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { Link, useParams } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
-import { Plus, Lock, Globe, X, Pin, Users } from "lucide-react"
+import { Plus, Lock, Globe, X, Pin, Users, Settings } from "lucide-react"
 import { useWorkspace } from "@/hooks/use-workspaces"
 import { useBoards, useCreateBoard, useStarBoard } from "@/hooks/use-boards"
 import { useWorkspaceSocket } from "@/hooks/use-workspace-socket"
@@ -75,6 +75,16 @@ export default function WorkspacePage() {
               <Users className="size-4" />
               Members
             </button>
+          )}
+          {isAdminOrOwner && (
+            <Link
+              to={`/w/${slug}/settings`}
+              className="bg-secondary text-foreground border border-border rounded-lg p-2.5
+                         hover:bg-secondary/80 transition-colors flex items-center justify-center"
+              title="Workspace settings"
+            >
+              <Settings className="size-4" />
+            </Link>
           )}
           <button
             onClick={() => setShowCreateForm(true)}

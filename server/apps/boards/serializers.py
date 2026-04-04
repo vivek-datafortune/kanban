@@ -2,7 +2,7 @@ from rest_framework import serializers
 
 from apps.users.serializers import UserSerializer
 
-from .models import Board, Card, CardLabel, CardMember, ChecklistItem, Label, List, StarredBoard, Activity
+from .models import Board, Card, CardLabel, CardMember, ChecklistItem, Comment, Label, List, StarredBoard, Activity
 
 
 class LabelSerializer(serializers.ModelSerializer):
@@ -159,3 +159,20 @@ class ActivitySerializer(serializers.ModelSerializer):
         model = Activity
         fields = ("id", "board", "card", "card_title", "actor", "action", "details", "created_at")
         read_only_fields = fields
+
+
+class CommentSerializer(serializers.ModelSerializer):
+    author = UserSerializer(read_only=True)
+    replies = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Comment
+        fields = ("id", "card", "author", "body", "parent", "replies", "created_at", "updated_at")
+        read_only_fields = ("id", "card", "author", "replies", "created_at", "updated_at")
+
+    def get_replies(self, obj):
+        # Only top-level comments return replies; replies return empty list
+        if obj.parent_id is not None:
+            return []
+        qs = obj.replies.select_related("author").order_by("created_at")
+        return CommentSerializer(qs, many=True).data

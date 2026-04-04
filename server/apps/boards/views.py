@@ -1,3 +1,5 @@
+import re
+
 from rest_framework import generics, status
 from rest_framework.pagination import LimitOffsetPagination
 from rest_framework.permissions import IsAuthenticated
@@ -9,7 +11,7 @@ from apps.workspaces.permissions import IsWorkspaceAdmin, IsWorkspaceMember
 
 from apps.realtime.broadcast import broadcast_board_event, broadcast_card_updated, broadcast_workspace_event
 from .activity import log_activity
-from .models import Board, Card, CardLabel, CardMember, ChecklistItem, Label, List, StarredBoard, Activity
+from .models import Board, Card, CardLabel, CardMember, ChecklistItem, Comment, Label, List, StarredBoard, Activity
 from .serializers import (
     ActivitySerializer,
     BoardCreateSerializer,
@@ -19,6 +21,7 @@ from .serializers import (
     CardMoveSerializer,
     CardSerializer,
     ChecklistItemSerializer,
+    CommentSerializer,
     LabelSerializer,
     ListCreateSerializer,
     ListSerializer,
@@ -431,6 +434,21 @@ class CardMemberView(APIView):
                 action="member.added",
                 details={"member_email": member.email, "member_name": member.get_full_name()},
             )
+            # Don't notify if someone assigns themselves
+            if member.pk != request.user.pk:
+                from apps.notifications.models import Notification
+                from apps.realtime.broadcast import broadcast_notification
+                actor_name = request.user.get_full_name() or request.user.email
+                notif = Notification.objects.create(
+                    user=member,
+                    type=Notification.Type.ASSIGNED,
+                    title=f"{actor_name} assigned you to \"{card.title}\"",
+                    body=f"In board: {card.list.board.title}",
+                    card=card,
+                    board=card.list.board,
+                    workspace=card.list.board.workspace,
+                )
+                broadcast_notification(member.pk, notif)
         return Response(status=status.HTTP_201_CREATED)
 
     def delete(self, request, pk, user_pk):
@@ -564,4 +582,183 @@ class ChecklistItemDetailView(APIView):
         card_pk = item.card_id
         item.delete()
         broadcast_card_updated(board_id, card_pk)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# ── Comment views ──────────────────────────────────────────────────────────────
+
+class CommentPagination(LimitOffsetPagination):
+    default_limit = 20
+    max_limit = 100
+
+
+class CommentListCreateView(APIView):
+    """List top-level comments for a card / create a new comment or reply."""
+    permission_classes = [IsAuthenticated]
+    pagination_class = CommentPagination
+
+    def _get_card(self, pk):
+        try:
+            return Card.objects.select_related("list__board").get(pk=pk)
+        except Card.DoesNotExist:
+            return None
+
+    def get(self, request, pk):
+        card = self._get_card(pk)
+        if not card:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        # Only return top-level comments; replies are nested inside them
+        qs = (
+            Comment.objects.filter(card=card, parent=None)
+            .select_related("author")
+            .prefetch_related("replies__author")
+        )
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(qs, request)
+        serializer = CommentSerializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
+
+    def post(self, request, pk):
+        card = self._get_card(pk)
+        if not card:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        parent_id = request.data.get("parent")
+        if parent_id:
+            try:
+                parent = Comment.objects.get(pk=parent_id, card=card, parent=None)
+            except Comment.DoesNotExist:
+                return Response(
+                    {"detail": "Parent comment not found or is already a reply."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        else:
+            parent = None
+
+        serializer = CommentSerializer(data=request.data)
+        if serializer.is_valid():
+            comment = serializer.save(card=card, author=request.user, parent=parent)
+            log_activity(
+                board=card.list.board,
+                card=card,
+                actor=request.user,
+                action="comment.added",
+                details={"body_preview": comment.body[:100]},
+            )
+            # Re-fetch with author so serializer output is complete
+            comment.refresh_from_db()
+            comment.author  # already loaded via save
+            out = CommentSerializer(
+                Comment.objects.select_related("author")
+                .prefetch_related("replies__author")
+                .get(pk=comment.pk)
+            )
+            board_id = str(card.list.board_id)
+            broadcast_board_event(board_id, "comment.added", {
+                "card_id": str(card.pk),
+                "comment": out.data,
+            })
+            actor_name = request.user.get_full_name() or request.user.email
+            # Notify the parent comment author when someone replies (skip self-replies)
+            if parent and parent.author_id != request.user.pk:
+                from apps.notifications.models import Notification
+                from apps.realtime.broadcast import broadcast_notification
+                notif = Notification.objects.create(
+                    user=parent.author,
+                    type=Notification.Type.COMMENT_REPLY,
+                    title=f"{actor_name} replied to your comment on \"{card.title}\"",
+                    body=comment.body[:200],
+                    card=card,
+                    board=card.list.board,
+                    workspace=card.list.board.workspace,
+                )
+                broadcast_notification(parent.author_id, notif)
+            # @mention notifications
+            mentioned_emails = set(re.findall(
+                r'@([\w.!#$%&\'*+/=?^_`{|}~\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})',
+                comment.body, re.IGNORECASE,
+            ))
+            if mentioned_emails:
+                from django.contrib.auth import get_user_model
+                from apps.notifications.models import Notification as MentionNotif
+                from apps.realtime.broadcast import broadcast_notification as bn_mention
+                _User = get_user_model()
+                mentioned_users = _User.objects.filter(
+                    email__in=mentioned_emails,
+                    workspace_memberships__workspace=card.list.board.workspace,
+                ).exclude(pk=request.user.pk)
+                for mu in mentioned_users:
+                    mn = MentionNotif.objects.create(
+                        user=mu,
+                        type=MentionNotif.Type.MENTIONED,
+                        title=f"{actor_name} mentioned you in \"{card.title}\"",
+                        body=comment.body[:200],
+                        card=card,
+                        board=card.list.board,
+                        workspace=card.list.board.workspace,
+                    )
+                    bn_mention(mu.pk, mn)
+            return Response(out.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class CommentDetailView(APIView):
+    """Edit or delete a comment."""
+    permission_classes = [IsAuthenticated]
+
+    def _get_comment(self, pk):
+        try:
+            return Comment.objects.select_related("author", "card__list__board").get(pk=pk)
+        except Comment.DoesNotExist:
+            return None
+
+    def patch(self, request, pk):
+        comment = self._get_comment(pk)
+        if not comment:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        if comment.author != request.user:
+            return Response(
+                {"detail": "Only the author can edit this comment."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        serializer = CommentSerializer(comment, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            board_id = str(comment.card.list.board_id)
+            broadcast_board_event(board_id, "comment.updated", {
+                "card_id": str(comment.card_id),
+                "comment": serializer.data,
+            })
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        comment = self._get_comment(pk)
+        if not comment:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        # Author, or workspace admin/owner can delete
+        workspace = comment.card.list.board.workspace
+        membership = WorkspaceMembership.objects.filter(
+            workspace=workspace, user=request.user
+        ).first()
+        is_admin = membership and membership.role in ("owner", "admin")
+
+        if comment.author != request.user and not is_admin:
+            return Response(
+                {"detail": "You do not have permission to delete this comment."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        board_id = str(comment.card.list.board_id)
+        card_id = str(comment.card_id)
+        comment_id = str(comment.pk)
+        parent_id = str(comment.parent_id) if comment.parent_id else None
+        comment.delete()
+        broadcast_board_event(board_id, "comment.deleted", {
+            "card_id": card_id,
+            "comment_id": comment_id,
+            "parent_id": parent_id,
+        })
         return Response(status=status.HTTP_204_NO_CONTENT)

@@ -64,3 +64,19 @@ def broadcast_card_updated(board_id: str, card_pk) -> None:
         "card.updated",
         {"card": get_full_card_data(card_pk)},
     )
+
+
+def broadcast_notification(user_pk, notification) -> None:
+    """Push a notification to a specific user's private WS channel."""
+    from apps.notifications.serializers import NotificationSerializer
+
+    channel_layer = get_channel_layer()
+    payload = _make_serializable(NotificationSerializer(notification).data)
+    async_to_sync(channel_layer.group_send)(
+        f"user_{user_pk}",
+        {
+            "type": "notification.event",
+            "event_type": "notification.new",
+            "payload": payload,
+        },
+    )

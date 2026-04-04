@@ -65,6 +65,9 @@ export type ActivityAction =
   | "label.removed"
   | "member.added"
   | "member.removed"
+  | "comment.added"
+  | "comment.edited"
+  | "comment.deleted"
 
 export interface Activity {
   id: string
@@ -82,4 +85,15 @@ export interface PaginatedResponse<T> {
   next: string | null
   previous: string | null
   results: T[]
+}
+
+export interface Comment {
+  id: string
+  card: string
+  author: User
+  body: string
+  parent: string | null
+  replies: Comment[]
+  created_at: string
+  updated_at: string
 }

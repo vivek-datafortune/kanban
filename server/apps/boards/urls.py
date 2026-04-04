@@ -79,4 +79,15 @@ urlpatterns = [
         views.ChecklistItemDetailView.as_view(),
         name="checklist-detail",
     ),
+    # Comments
+    path(
+        "cards/<uuid:pk>/comments/",
+        views.CommentListCreateView.as_view(),
+        name="comment-list",
+    ),
+    path(
+        "comments/<uuid:pk>/",
+        views.CommentDetailView.as_view(),
+        name="comment-detail",
+    ),
 ]

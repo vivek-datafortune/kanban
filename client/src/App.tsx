@@ -5,6 +5,7 @@ import InvitePage from "@/pages/invite"
 import HomePage from "@/pages/home"
 import CreateWorkspacePage from "@/pages/create-workspace"
 import WorkspacePage from "@/pages/workspace"
+import WorkspaceSettingsPage from "@/pages/workspace-settings"
 import BoardPage from "@/pages/board"
 import CardPage from "@/pages/card"
 import AppLayout from "@/components/app-layout"
@@ -30,6 +31,7 @@ function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/create-workspace" element={<CreateWorkspacePage />} />
           <Route path="/w/:slug" element={<WorkspacePage />} />
+          <Route path="/w/:slug/settings" element={<WorkspaceSettingsPage />} />
           <Route path="/w/:slug/b/:boardId" element={<BoardPage />} />
           <Route path="/w/:slug/b/:boardId/c/:cardId" element={<CardPage />} />
         </Route>
