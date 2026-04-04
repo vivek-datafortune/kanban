@@ -2,7 +2,26 @@ from rest_framework import serializers
 
 from apps.users.serializers import UserSerializer
 
-from .models import Board, Card, CardLabel, CardMember, ChecklistItem, Comment, Label, List, StarredBoard, Activity
+from .models import Attachment, Board, Card, CardLabel, CardMember, ChecklistItem, Comment, Label, List, StarredBoard, Activity, TimeEntry
+
+
+class AttachmentSerializer(serializers.ModelSerializer):
+    uploaded_by = UserSerializer(read_only=True)
+    url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Attachment
+        fields = ("id", "filename", "size", "content_type", "url", "uploaded_by", "created_at")
+        read_only_fields = ("id", "filename", "size", "content_type", "uploaded_by", "created_at")
+
+    def get_url(self, obj):
+        request = self.context.get("request")
+        try:
+            url = obj.file.url
+            # file.url already returns a presigned URL when using S3Boto3Storage
+            return url
+        except Exception:
+            return None
 
 
 class LabelSerializer(serializers.ModelSerializer):
@@ -32,6 +51,8 @@ class CardSerializer(serializers.ModelSerializer):
     members = UserSerializer(many=True, read_only=True)
     created_by = UserSerializer(read_only=True)
     checklist_items = ChecklistItemSerializer(many=True, read_only=True)
+    attachment_count = serializers.IntegerField(source="attachments.count", read_only=True)
+    total_time_seconds = serializers.SerializerMethodField()
 
     class Meta:
         model = Card
@@ -40,9 +61,21 @@ class CardSerializer(serializers.ModelSerializer):
             "due_date", "start_date",
             "labels", "members", "created_by",
             "checklist_items",
+            "attachment_count",
+            "estimated_hours",
+            "total_time_seconds",
+            "priority",
             "created_at", "updated_at",
         )
         read_only_fields = ("id", "created_by", "created_at", "updated_at")
+
+    def get_total_time_seconds(self, obj):
+        from datetime import timedelta
+        total = sum(
+            (e.duration for e in obj.time_entries.all() if e.duration is not None),
+            timedelta(),
+        )
+        return int(total.total_seconds())
 
 
 class CardCreateSerializer(serializers.ModelSerializer):
@@ -176,3 +209,22 @@ class CommentSerializer(serializers.ModelSerializer):
             return []
         qs = obj.replies.select_related("author").order_by("created_at")
         return CommentSerializer(qs, many=True).data
+
+
+class TimeEntrySerializer(serializers.ModelSerializer):
+    user = UserSerializer(read_only=True)
+    duration_seconds = serializers.SerializerMethodField()
+
+    class Meta:
+        model = TimeEntry
+        fields = (
+            "id", "card", "user",
+            "started_at", "ended_at", "duration", "duration_seconds",
+            "note", "is_manual", "created_at",
+        )
+        read_only_fields = ("id", "card", "user", "started_at", "ended_at", "duration", "created_at")
+
+    def get_duration_seconds(self, obj):
+        if obj.duration is None:
+            return None
+        return int(obj.duration.total_seconds())

@@ -14,6 +14,7 @@ import {
   Pencil,
   ArrowLeft,
   Trash2,
+  Clock,
 } from "lucide-react"
 import { useUpdateCard, useAddCardLabel, useRemoveCardLabel, useMoveCard, useAddCardMember, useRemoveCardMember } from "@/hooks/use-cards"
 import { useCreateLabel, useUpdateLabel, useDeleteLabel } from "@/hooks/use-labels"
@@ -21,6 +22,7 @@ import { useWorkspaceMembers } from "@/hooks/use-workspaces"
 import { cn } from "@/lib/utils"
 import CardActivity from "@/components/card/card-activity"
 import CardChecklist from "@/components/card/card-checklist"
+import CardTimeTracking from "@/components/card/card-time-tracking"
 import type { Card, Label, List } from "@/types/board"
 import type { User } from "@/types/auth"
 
@@ -423,6 +425,17 @@ export default function CardRightPanel({ card, boardId, lists, labels, workspace
           cardId={card.id}
           boardId={boardId}
           items={card.checklist_items ?? []}
+        />
+      </AccordionSection>
+
+      {/* ── Time Tracking ── */}
+      <AccordionSection title="Time Tracking" icon={Clock} defaultOpen={false}>
+        <CardTimeTracking
+          cardId={card.id}
+          boardId={boardId}
+          cardTitle={card.title}
+          estimatedHours={card.estimated_hours ?? null}
+          totalTimeSeconds={card.total_time_seconds ?? 0}
         />
       </AccordionSection>
 

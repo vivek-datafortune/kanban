@@ -5,9 +5,10 @@ import TiptapEditor from "./tiptap-editor"
 interface CardDescriptionProps {
   description: string
   onSave: (description: string) => void
+  cardId?: string
 }
 
-export default function CardDescription({ description, onSave }: CardDescriptionProps) {
+export default function CardDescription({ description, onSave, cardId }: CardDescriptionProps) {
   const [isEditing, setIsEditing] = useState(false)
 
   const handleSave = (html: string) => {
@@ -38,6 +39,7 @@ export default function CardDescription({ description, onSave }: CardDescription
           content={description}
           onSave={handleSave}
           onCancel={() => setIsEditing(false)}
+          cardId={cardId}
         />
       ) : (
         <div

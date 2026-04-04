@@ -11,9 +11,10 @@ from apps.workspaces.permissions import IsWorkspaceAdmin, IsWorkspaceMember
 
 from apps.realtime.broadcast import broadcast_board_event, broadcast_card_updated, broadcast_workspace_event
 from .activity import log_activity
-from .models import Board, Card, CardLabel, CardMember, ChecklistItem, Comment, Label, List, StarredBoard, Activity
+from .models import Attachment, Board, Card, CardLabel, CardMember, ChecklistItem, Comment, Label, List, StarredBoard, Activity, TimeEntry
 from .serializers import (
     ActivitySerializer,
+    AttachmentSerializer,
     BoardCreateSerializer,
     BoardListSerializer,
     BoardSerializer,
@@ -25,6 +26,7 @@ from .serializers import (
     LabelSerializer,
     ListCreateSerializer,
     ListSerializer,
+    TimeEntrySerializer,
 )
 
 
@@ -762,3 +764,337 @@ class CommentDetailView(APIView):
             "parent_id": parent_id,
         })
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# ── Attachment views ──────────────────────────────────────────────────────────
+
+class AttachmentListCreateView(APIView):
+    """GET list / POST upload attachments for a card."""
+    permission_classes = [IsAuthenticated]
+
+    def _get_card(self, pk):
+        try:
+            return Card.objects.select_related("list__board__workspace").get(pk=pk)
+        except Card.DoesNotExist:
+            return None
+
+    def get(self, request, pk):
+        card = self._get_card(pk)
+        if not card:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        from .models import Attachment
+        attachments = Attachment.objects.filter(card=card).select_related("uploaded_by")
+        serializer = AttachmentSerializer(attachments, many=True, context={"request": request})
+        return Response(serializer.data)
+
+    def post(self, request, pk):
+        from .models import Attachment, ALLOWED_CONTENT_TYPES, MAX_ATTACHMENT_SIZE, MAX_ATTACHMENTS_PER_CARD
+        card = self._get_card(pk)
+        if not card:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        file = request.FILES.get("file")
+        if not file:
+            return Response({"detail": "No file provided."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Validate content type
+        content_type = file.content_type or "application/octet-stream"
+        if content_type not in ALLOWED_CONTENT_TYPES:
+            return Response(
+                {"detail": f"File type '{content_type}' is not allowed."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validate size
+        if file.size > MAX_ATTACHMENT_SIZE:
+            mb = MAX_ATTACHMENT_SIZE // (1024 * 1024)
+            return Response(
+                {"detail": f"File exceeds the {mb}MB limit."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validate count
+        if Attachment.objects.filter(card=card).count() >= MAX_ATTACHMENTS_PER_CARD:
+            return Response(
+                {"detail": f"Cards can have at most {MAX_ATTACHMENTS_PER_CARD} attachments."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        attachment = Attachment.objects.create(
+            card=card,
+            file=file,
+            filename=file.name,
+            size=file.size,
+            content_type=content_type,
+            uploaded_by=request.user,
+        )
+        log_activity(
+            board=card.list.board,
+            card=card,
+            actor=request.user,
+            action="attachment.added",
+            details={"filename": file.name},
+        )
+        broadcast_card_updated(card.list.board_id, card.pk)
+        serializer = AttachmentSerializer(attachment, context={"request": request})
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class AttachmentDetailView(APIView):
+    """DELETE an attachment."""
+    permission_classes = [IsAuthenticated]
+
+    def _get_attachment(self, pk):
+        from .models import Attachment
+        try:
+            return Attachment.objects.select_related(
+                "uploaded_by", "card__list__board__workspace"
+            ).get(pk=pk)
+        except Attachment.DoesNotExist:
+            return None
+
+    def delete(self, request, pk):
+        attachment = self._get_attachment(pk)
+        if not attachment:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        workspace = attachment.card.list.board.workspace
+        membership = WorkspaceMembership.objects.filter(
+            workspace=workspace, user=request.user
+        ).first()
+        is_admin = membership and membership.role in ("owner", "admin")
+
+        if attachment.uploaded_by != request.user and not is_admin:
+            return Response(
+                {"detail": "You do not have permission to delete this attachment."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        card = attachment.card
+        attachment.file.delete(save=False)  # delete from S3/MinIO
+        attachment.delete()
+        log_activity(
+            board=card.list.board,
+            card=card,
+            actor=request.user,
+            action="attachment.removed",
+            details={"filename": attachment.filename},
+        )
+        broadcast_card_updated(card.list.board_id, card.pk)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# ── Time Tracking views ───────────────────────────────────────────────────────
+
+class TimeEntryListView(APIView):
+    """GET all time entries for a card."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        try:
+            card = Card.objects.get(pk=pk)
+        except Card.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        entries = TimeEntry.objects.filter(card=card).select_related("user")
+        return Response(TimeEntrySerializer(entries, many=True).data)
+
+
+class TimerStartView(APIView):
+    """POST — start a new timer for the requesting user on this card."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        try:
+            card = Card.objects.select_related("list__board").get(pk=pk)
+        except Card.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        # Stop any existing running timer for this user
+        running = TimeEntry.objects.filter(
+            user=request.user, ended_at__isnull=True, is_manual=False
+        ).select_related("card__list__board").first()
+        if running:
+            from django.utils import timezone
+            from datetime import timedelta
+            running.ended_at = timezone.now()
+            running.duration = running.ended_at - running.started_at
+            running.save(update_fields=["ended_at", "duration"])
+
+        from django.utils import timezone
+        entry = TimeEntry.objects.create(
+            card=card,
+            user=request.user,
+            started_at=timezone.now(),
+        )
+        log_activity(
+            board=card.list.board,
+            card=card,
+            actor=request.user,
+            action="time.started",
+            details={},
+        )
+        return Response(TimeEntrySerializer(entry).data, status=status.HTTP_201_CREATED)
+
+
+class TimerStopView(APIView):
+    """POST — stop the user's running timer on this card."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        try:
+            card = Card.objects.select_related("list__board").get(pk=pk)
+        except Card.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        entry = TimeEntry.objects.filter(
+            card=card, user=request.user, ended_at__isnull=True, is_manual=False
+        ).first()
+        if not entry:
+            return Response(
+                {"detail": "No running timer found for this card."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from django.utils import timezone
+        entry.ended_at = timezone.now()
+        entry.duration = entry.ended_at - entry.started_at
+        entry.save(update_fields=["ended_at", "duration"])
+        log_activity(
+            board=card.list.board,
+            card=card,
+            actor=request.user,
+            action="time.stopped",
+            details={"seconds": int(entry.duration.total_seconds())},
+        )
+        broadcast_card_updated(card.list.board_id, card.pk)
+        return Response(TimeEntrySerializer(entry).data)
+
+
+class ManualTimeEntryView(APIView):
+    """POST — add a manual time entry {duration_seconds, note}."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        try:
+            card = Card.objects.select_related("list__board").get(pk=pk)
+        except Card.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        duration_seconds = request.data.get("duration_seconds")
+        if not duration_seconds:
+            return Response({"detail": "duration_seconds is required."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            duration_seconds = int(duration_seconds)
+            if duration_seconds <= 0:
+                raise ValueError
+        except (ValueError, TypeError):
+            return Response({"detail": "duration_seconds must be a positive integer."}, status=status.HTTP_400_BAD_REQUEST)
+
+        from datetime import timedelta
+        from django.utils import timezone
+        now = timezone.now()
+        entry = TimeEntry.objects.create(
+            card=card,
+            user=request.user,
+            started_at=now,
+            ended_at=now,
+            duration=timedelta(seconds=duration_seconds),
+            note=request.data.get("note", ""),
+            is_manual=True,
+        )
+        log_activity(
+            board=card.list.board,
+            card=card,
+            actor=request.user,
+            action="time.logged",
+            details={"seconds": duration_seconds, "note": entry.note},
+        )
+        broadcast_card_updated(card.list.board_id, card.pk)
+        return Response(TimeEntrySerializer(entry).data, status=status.HTTP_201_CREATED)
+
+
+class TimeEntryDetailView(APIView):
+    """DELETE a time entry."""
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, pk):
+        try:
+            entry = TimeEntry.objects.select_related("user", "card__list__board__workspace").get(pk=pk)
+        except TimeEntry.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        workspace = entry.card.list.board.workspace
+        membership = WorkspaceMembership.objects.filter(workspace=workspace, user=request.user).first()
+        is_admin = membership and membership.role in ("owner", "admin")
+
+        if entry.user != request.user and not is_admin:
+            return Response({"detail": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        card = entry.card
+        entry.delete()
+        broadcast_card_updated(card.list.board_id, card.pk)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class CardEstimateView(APIView):
+    """PATCH — update estimated_hours on a card."""
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, pk):
+        try:
+            card = Card.objects.get(pk=pk)
+        except Card.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        estimated_hours = request.data.get("estimated_hours")
+        if estimated_hours is None:
+            return Response({"detail": "estimated_hours is required."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            val = float(estimated_hours)
+            if val < 0:
+                raise ValueError
+        except (ValueError, TypeError):
+            return Response({"detail": "estimated_hours must be a non-negative number."}, status=status.HTTP_400_BAD_REQUEST)
+
+        card.estimated_hours = val if val > 0 else None
+        card.save(update_fields=["estimated_hours"])
+        return Response({"estimated_hours": card.estimated_hours})
+
+
+class BoardTimeReportView(APIView):
+    """GET aggregated time per user per card for a board."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        try:
+            board = Board.objects.get(pk=pk)
+        except Board.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        from django.db.models import Sum
+        from datetime import timedelta
+
+        entries = (
+            TimeEntry.objects.filter(card__list__board=board, duration__isnull=False)
+            .select_related("user", "card")
+        )
+
+        # Build report: [{user, card_id, card_title, total_seconds}]
+        aggregated: dict[tuple, dict] = {}
+        for entry in entries:
+            key = (entry.user_id, entry.card_id)
+            if key not in aggregated:
+                aggregated[key] = {
+                    "user": {
+                        "pk": entry.user.pk,
+                        "email": entry.user.email,
+                        "first_name": entry.user.first_name,
+                        "last_name": entry.user.last_name,
+                    },
+                    "card_id": str(entry.card_id),
+                    "card_title": entry.card.title,
+                    "total_seconds": 0,
+                }
+            aggregated[key]["total_seconds"] += int(entry.duration.total_seconds())
+
+        return Response(list(aggregated.values()))

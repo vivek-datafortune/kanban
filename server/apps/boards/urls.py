@@ -90,4 +90,23 @@ urlpatterns = [
         views.CommentDetailView.as_view(),
         name="comment-detail",
     ),
+    # Attachments
+    path(
+        "cards/<uuid:pk>/attachments/",
+        views.AttachmentListCreateView.as_view(),
+        name="attachment-list",
+    ),
+    path(
+        "attachments/<uuid:pk>/",
+        views.AttachmentDetailView.as_view(),
+        name="attachment-detail",
+    ),
+    # Time tracking
+    path("cards/<uuid:pk>/time/", views.TimeEntryListView.as_view(), name="time-list"),
+    path("cards/<uuid:pk>/time/start/", views.TimerStartView.as_view(), name="timer-start"),
+    path("cards/<uuid:pk>/time/stop/", views.TimerStopView.as_view(), name="timer-stop"),
+    path("cards/<uuid:pk>/time/manual/", views.ManualTimeEntryView.as_view(), name="time-manual"),
+    path("cards/<uuid:pk>/estimate/", views.CardEstimateView.as_view(), name="card-estimate"),
+    path("time-entries/<uuid:pk>/", views.TimeEntryDetailView.as_view(), name="time-entry-detail"),
+    path("boards/<uuid:pk>/time-report/", views.BoardTimeReportView.as_view(), name="time-report"),
 ]

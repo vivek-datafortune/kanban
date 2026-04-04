@@ -4,6 +4,14 @@ import type { User } from "@/types/auth"
 
 type Theme = "light" | "dark" | "system"
 
+export interface ActiveTimer {
+  entryId: string
+  cardId: string
+  cardTitle: string
+  boardId: string
+  startedAt: string // ISO string
+}
+
 interface AppState {
   theme: Theme
   setTheme: (theme: Theme) => void
@@ -11,6 +19,8 @@ interface AppState {
   setUser: (user: User | null) => void
   isAuthenticated: boolean
   logout: () => void
+  activeTimer: ActiveTimer | null
+  setActiveTimer: (timer: ActiveTimer | null) => void
 }
 
 export const useStore = create<AppState>()(
@@ -22,10 +32,12 @@ export const useStore = create<AppState>()(
       isAuthenticated: false,
       setUser: (user) => set({ user, isAuthenticated: !!user }),
       logout: () => set({ user: null, isAuthenticated: false }),
+      activeTimer: null,
+      setActiveTimer: (timer) => set({ activeTimer: timer }),
     }),
     {
       name: "app-store",
-      partialize: (state) => ({ theme: state.theme }),
+      partialize: (state) => ({ theme: state.theme, activeTimer: state.activeTimer }),
     },
   ),
 )

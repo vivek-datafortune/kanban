@@ -53,6 +53,7 @@ LOCAL_APPS = [
     "apps.boards",
     "apps.realtime",
     "apps.notifications",
+    "apps.ai",
 ]
 
 INSTALLED_APPS = ["daphne"] + DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -140,8 +141,24 @@ USE_TZ = True
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
+# ── S3 / MinIO file storage ───────────────────────────────────────────────────
+AWS_ACCESS_KEY_ID = env("AWS_ACCESS_KEY_ID", default="")
+AWS_SECRET_ACCESS_KEY = env("AWS_SECRET_ACCESS_KEY", default="")
+AWS_STORAGE_BUCKET_NAME = env("AWS_STORAGE_BUCKET_NAME", default="trello-attachments")
+AWS_S3_ENDPOINT_URL = env("AWS_S3_ENDPOINT_URL", default=None)  # None = real AWS; set for MinIO
+AWS_S3_REGION_NAME = env("AWS_S3_REGION_NAME", default="us-east-1")
+AWS_QUERYSTRING_AUTH = True   # presigned URLs
+AWS_QUERYSTRING_EXPIRE = 3600  # 1 hour
+AWS_S3_FILE_OVERWRITE = False  # never overwrite on name collision
+AWS_DEFAULT_ACL = None
+
+_use_s3 = bool(AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY)
+
 STORAGES = {
-    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "default": {
+        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage" if _use_s3
+        else "django.core.files.storage.FileSystemStorage",
+    },
     "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
 }
 
@@ -240,3 +257,12 @@ EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
 EMAIL_USE_TLS = True
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="noreply@example.com")
+
+# ── AI / Groq ─────────────────────────────────────────────────────────────────
+GROQ_API_KEY = env("GROQ_API_KEY", default="")
+GROQ_MODEL = env("GROQ_MODEL", default="llama-3.3-70b-versatile")
+AI_RATE_LIMIT = env("AI_RATE_LIMIT", default="20/hour")
+
+# Register the AI throttle scope with DRF
+REST_FRAMEWORK.setdefault("DEFAULT_THROTTLE_RATES", {})
+REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["ai"] = AI_RATE_LIMIT

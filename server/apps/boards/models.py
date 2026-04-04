@@ -93,6 +93,18 @@ class Card(models.Model):
     members = models.ManyToManyField(
         settings.AUTH_USER_MODEL, through="CardMember", blank=True
     )
+    estimated_hours = models.DecimalField(
+        max_digits=6, decimal_places=2, null=True, blank=True
+    )
+    PRIORITY_CHOICES = [
+        ("P0", "P0"),
+        ("P1", "P1"),
+        ("P2", "P2"),
+        ("P3", "P3"),
+    ]
+    priority = models.CharField(
+        max_length=2, choices=PRIORITY_CHOICES, blank=True, default=""
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -183,3 +195,71 @@ class Comment(models.Model):
 
     def __str__(self):
         return f"Comment by {self.author} on {self.card}"
+
+
+ALLOWED_CONTENT_TYPES = {
+    # Images
+    "image/jpeg", "image/png", "image/gif", "image/webp", "image/svg+xml",
+    # Documents
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-powerpoint",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "text/plain", "text/csv",
+    # Archives
+    "application/zip", "application/x-zip-compressed",
+    "application/x-tar", "application/gzip",
+}
+MAX_ATTACHMENT_SIZE = 25 * 1024 * 1024  # 25 MB
+MAX_ATTACHMENTS_PER_CARD = 10
+
+
+def attachment_upload_path(instance, filename):
+    return f"attachments/{instance.card_id}/{filename}"
+
+
+class Attachment(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    card = models.ForeignKey(Card, on_delete=models.CASCADE, related_name="attachments")
+    file = models.FileField(upload_to=attachment_upload_path)
+    filename = models.CharField(max_length=255)  # original filename
+    size = models.PositiveIntegerField()  # bytes
+    content_type = models.CharField(max_length=100)
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="attachments",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.filename} on {self.card}"
+
+
+class TimeEntry(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    card = models.ForeignKey(Card, on_delete=models.CASCADE, related_name="time_entries")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="time_entries",
+    )
+    started_at = models.DateTimeField()
+    ended_at = models.DateTimeField(null=True, blank=True)  # null = timer running
+    duration = models.DurationField(null=True, blank=True)  # computed on stop / set for manual
+    note = models.CharField(max_length=500, blank=True, default="")
+    is_manual = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"TimeEntry by {self.user} on {self.card}"

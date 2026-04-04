@@ -1,0 +1,13 @@
+﻿import { useState, useRef } from "react"
+import { useEditor, EditorContent } from "@tiptap/react"
+import StarterKit from "@tiptap/starter-kit"
+import Placeholder from "@tiptap/extension-placeholder"
+import TaskList from "@tiptap/extension-task-list"
+import TaskItem from "@tiptap/extension-task-item"
+import {
+  Bold, Italic, Strikethrough, List, ListOrdered, Quote, Minus,
+  Undo, Redo, Code, CheckSquare, Sparkles, Check, Loader2,
+  Undo2, ChevronDown, ArrowRight,
+} from "lucide-react"
+import { motion, AnimatePresence } from "framer-motion"
+import { cn } from "@/lib/utils"

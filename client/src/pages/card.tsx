@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from "react-router-dom"
 import { motion } from "framer-motion"
-import { MessageSquare, Paperclip, Calendar, User as UserIcon, LayoutList } from "lucide-react"
+import { Calendar, User as UserIcon, LayoutList } from "lucide-react"
 import { useBoard } from "@/hooks/use-boards"
 import { useUpdateCard } from "@/hooks/use-cards"
 import { useWorkspace } from "@/hooks/use-workspaces"
@@ -10,6 +10,7 @@ import CardHeader from "@/components/card/card-header"
 import CardDescription from "@/components/card/card-description"
 import CardRightPanel from "@/components/card/card-sidebar"
 import CardComments from "@/components/card/card-comments"
+import CardAttachments from "@/components/card/card-attachments"
 import type { Card, List } from "@/types/board"
 
 function findCard(lists: List[] | undefined, cardId: string): { card: Card | null; currentList: List | null } {
@@ -30,42 +31,6 @@ function Section({ children, delay = 0 }: { children: React.ReactNode; delay?: n
       className="bg-card border border-border rounded-xl p-5"
     >
       {children}
-    </motion.div>
-  )
-}
-
-function ComingSoonSection({
-  icon: Icon,
-  title,
-  description,
-  delay = 0,
-}: {
-  icon: typeof MessageSquare
-  title: string
-  description: string
-  delay?: number
-}) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, delay, ease: [0.25, 0.46, 0.45, 0.94] }}
-      className="bg-card/50 border border-dashed border-border rounded-xl p-5 opacity-60"
-    >
-      <div className="flex items-center gap-3">
-        <div className="size-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-          <Icon className="size-4.5 text-primary" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <h4 className="text-sm font-semibold text-foreground">{title}</h4>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-              Coming Soon
-            </span>
-          </div>
-          <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
-        </div>
-      </div>
     </motion.div>
   )
 }
@@ -168,16 +133,14 @@ export default function CardPage() {
                 <CardDescription
                   description={card.description}
                   onSave={(description) => updateCard({ id: card.id, description })}
+                  cardId={card.id}
                 />
               </Section>
 
               {/* Attachments */}
-              <ComingSoonSection
-                icon={Paperclip}
-                title="Attachments"
-                description="Upload files, images, and documents directly to this card."
-                delay={0.15}
-              />
+              <Section delay={0.15}>
+                <CardAttachments cardId={card.id} boardId={boardId!} />
+              </Section>
 
               {/* Comments */}
               <Section delay={0.2}>

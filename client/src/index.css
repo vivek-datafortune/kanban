@@ -312,4 +312,82 @@ body {
   margin: 1em 0;
 }
 
+/* Tiptap task list (checkboxes in description) */
+.prose ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0;
+  margin: 0.4em 0;
+}
+.prose ul[data-type="taskList"] li[data-type="taskItem"] {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5em;
+  margin: 0.25em 0;
+}
+.prose ul[data-type="taskList"] li[data-type="taskItem"] > label {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  user-select: none;
+  cursor: pointer;
+}
+.prose ul[data-type="taskList"] li[data-type="taskItem"] > label > input[type="checkbox"] {
+  width: 0.9em;
+  height: 0.9em;
+  accent-color: hsl(var(--primary));
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.prose ul[data-type="taskList"] li[data-type="taskItem"][data-checked="true"] > div {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
 
+/* ── AI typewriter & shimmer animations ──────────────────────────────────── */
+@keyframes ai-text-shimmer {
+  0%   { background-position:  200% center; }
+  100% { background-position: -200% center; }
+}
+.ai-typing-text {
+  background: linear-gradient(
+    90deg,
+    hsl(var(--foreground))  35%,
+    hsl(var(--primary))     50%,
+    hsl(var(--foreground))  65%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: ai-text-shimmer 1.6s linear infinite;
+}
+
+@keyframes ai-shimmer-move {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(500%); }
+}
+.ai-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 25%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.07), transparent);
+  animation: ai-shimmer-move 1.4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes ai-border-pulse {
+  0%,100% { box-shadow: 0 0  0px 0px hsl(var(--primary) / 0);   border-color: hsl(var(--primary) / 0.3); }
+  50%      { box-shadow: 0 0 18px 3px hsl(var(--primary) / 0.15); border-color: hsl(var(--primary) / 0.65); }
+}
+.ai-preview-glow {
+  animation: ai-border-pulse 2s ease-in-out infinite;
+}
+
+@keyframes ai-flash-reveal {
+  0%   { box-shadow: 0 0 0 2px hsl(var(--primary) / 0.55), 0 0 28px 6px hsl(var(--primary) / 0.18); border-color: hsl(var(--primary) / 0.55); }
+  100% { box-shadow: none; border-color: hsl(var(--border)); }
+}
+.ai-flash-reveal {
+  animation: ai-flash-reveal 0.7s ease-out forwards;
+}

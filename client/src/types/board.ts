@@ -51,9 +51,44 @@ export interface Card {
   labels: Label[]
   members: User[]
   checklist_items: ChecklistItem[]
+  attachment_count: number
+  estimated_hours: number | null
+  total_time_seconds: number
+  priority: "P0" | "P1" | "P2" | "P3" | ""
   created_by: User
   created_at: string
   updated_at: string
+}
+
+export interface TimeEntry {
+  id: string
+  card: string
+  user: User
+  started_at: string
+  ended_at: string | null
+  duration: string | null
+  duration_seconds: number | null
+  note: string
+  is_manual: boolean
+  created_at: string
+}
+
+export interface AISuggestion {
+  id: string
+  card: string
+  subtasks: string[]
+  description: string
+  suggested_labels: string[]  // label UUIDs
+  priority: "P0" | "P1" | "P2" | "P3"
+  duplicates: Array<{
+    id: string
+    title: string
+    list_title: string
+    similarity: number
+  }>
+  is_accepted: boolean
+  is_dismissed: boolean
+  created_at: string
 }
 
 export type ActivityAction =
@@ -85,6 +120,17 @@ export interface PaginatedResponse<T> {
   next: string | null
   previous: string | null
   results: T[]
+}
+
+export interface Attachment {
+  id: string
+  card: string
+  filename: string
+  size: number
+  content_type: string
+  url: string
+  uploaded_by: User
+  created_at: string
 }
 
 export interface Comment {

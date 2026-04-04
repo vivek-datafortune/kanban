@@ -1,12 +1,67 @@
-import { NavLink, Outlet } from "react-router-dom"
-import { motion } from "framer-motion"
-import { Kanban, LogOut, Sun, Moon, Monitor, Plus, Layers } from "lucide-react"
+import { NavLink, Outlet, useNavigate } from "react-router-dom"
+import { motion, AnimatePresence } from "framer-motion"
+import { Kanban, LogOut, Sun, Moon, Monitor, Plus, Layers, Square } from "lucide-react"
 import { useStore } from "@/store/app.store"
 import { useLogout, useCurrentUser } from "@/hooks/use-auth"
 import { useTheme, type Theme } from "@/hooks/use-theme"
 import { useWorkspaces } from "@/hooks/use-workspaces"
 import NotificationBell from "@/components/notification-bell"
 import { cn } from "@/lib/utils"
+import { useElapsedSeconds, useStopTimer } from "@/hooks/use-time-tracking"
+
+function formatElapsed(s: number): string {
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  const sec = s % 60
+  if (h > 0) return `${h}:${m.toString().padStart(2, "0")}:${sec.toString().padStart(2, "0")}`
+  return `${m.toString().padStart(2, "0")}:${sec.toString().padStart(2, "0")}`
+}
+
+function ActiveTimerPill() {
+  const activeTimer = useStore((s) => s.activeTimer)
+  const navigate = useNavigate()
+  const elapsed = useElapsedSeconds(activeTimer?.startedAt ?? null)
+  const { mutate: stop, isPending } = useStopTimer(
+    activeTimer?.cardId ?? "",
+    activeTimer?.boardId ?? "",
+  )
+
+  return (
+    <AnimatePresence>
+      {activeTimer && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 8 }}
+          className="mx-3 rounded-xl border border-red-500/20 bg-red-500/5 px-3 py-2.5 space-y-1.5"
+        >
+          <div className="flex items-center gap-1.5">
+            <span className="relative flex size-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+              <span className="relative inline-flex rounded-full size-2 bg-red-500" />
+            </span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-red-500">Recording</span>
+            <span className="ml-auto text-xs font-bold tabular-nums text-red-500">{formatElapsed(elapsed)}</span>
+          </div>
+          <button
+            onClick={() => navigate(`/w/${activeTimer.boardId?.split("-")[0]}/b/${activeTimer.boardId}`)}
+            className="text-[11px] text-foreground/80 truncate w-full text-left hover:text-foreground transition-colors cursor-pointer"
+          >
+            {activeTimer.cardTitle}
+          </button>
+          <button
+            onClick={() => stop()}
+            disabled={isPending}
+            className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-red-500 text-white text-xs font-semibold hover:bg-red-600 transition-colors cursor-pointer disabled:opacity-60"
+          >
+            <Square className="w-3 h-3 fill-white" />
+            Stop Timer
+          </button>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  )
+}
 
 export default function AppLayout() {
   const { user } = useStore()
@@ -74,6 +129,9 @@ export default function AppLayout() {
 
         {/* Bottom section */}
         <div className="px-3 pb-4 space-y-3">
+          {/* Active timer */}
+          <ActiveTimerPill />
+
           {/* Theme toggle */}
           <div className="flex items-center justify-center rounded-xl bg-secondary/60 border border-border p-1 gap-1">
             {themeOptions.map(({ value, icon: Icon }) => (

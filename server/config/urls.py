@@ -23,6 +23,8 @@ urlpatterns = [
     path("api/invitations/accept/", InvitationAcceptView.as_view(), name="invitation-accept"),
     # Notifications
     path("api/notifications/", include("apps.notifications.urls")),
+    # AI features
+    path("api/", include("apps.ai.urls")),
 ]
 
 if settings.DEBUG:

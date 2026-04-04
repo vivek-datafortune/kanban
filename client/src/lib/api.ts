@@ -21,7 +21,7 @@ function getCookie(name: string): string | undefined {
 
 interface RequestOptions {
   method?: string
-  body?: unknown
+  body?: unknown | FormData
   headers?: Record<string, string>
 }
 
@@ -34,14 +34,14 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
     method,
     credentials: 'include',
     headers: {
-      'Content-Type': 'application/json',
+      ...(body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...headers,
     },
   }
 
   if (body) {
-    config.body = JSON.stringify(body)
+    config.body = body instanceof FormData ? body : JSON.stringify(body)
   }
 
   const response = await fetch(`${API_BASE}${endpoint}`, config)

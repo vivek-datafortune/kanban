@@ -112,18 +112,53 @@ const MentionInput = forwardRef<
     placeholder: string
     onSubmit: (text: string) => void
     onChange: (isEmpty: boolean) => void
+    onCancel?: () => void
     members: WorkspaceMember[]
     currentUserEmail?: string
     autoFocus?: boolean
     minHeight?: string
+    initialValue?: string
   }
 >(function MentionInput(
-  { placeholder, onSubmit, onChange, members, currentUserEmail, autoFocus, minHeight = "4.5rem" },
+  { placeholder, onSubmit, onChange, onCancel, members, currentUserEmail, autoFocus, minHeight = "4.5rem", initialValue },
   ref,
 ) {
   const divRef = useRef<HTMLDivElement>(null)
   const [mentionQuery, setMentionQuery] = useState<string | null>(null)
-  const [showPlaceholder, setShowPlaceholder] = useState(true)
+  const [showPlaceholder, setShowPlaceholder] = useState(!initialValue?.trim())
+
+  // Pre-populate chips for initialValue on first mount
+  useEffect(() => {
+    if (!divRef.current || !initialValue) return
+    const knownEmails = new Set(members.map((m) => m.user.email.toLowerCase()))
+    const SPLIT_RE = /(@[.\w!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g
+    const parts = initialValue.split(SPLIT_RE)
+    divRef.current.innerHTML = ""
+    for (const part of parts) {
+      if (part.startsWith("@") && part.slice(1).includes("@") && knownEmails.has(part.slice(1).toLowerCase())) {
+        const email = part.slice(1)
+        const chip = buildChip(email)
+        divRef.current.appendChild(chip)
+      } else if (part) {
+        divRef.current.appendChild(document.createTextNode(part))
+      }
+    }
+    setShowPlaceholder(!serializeEditor(divRef.current).trim())
+    onChange(!serializeEditor(divRef.current).trim())
+    if (autoFocus) {
+      divRef.current.focus()
+      // Move cursor to end
+      const sel = window.getSelection()
+      if (sel) {
+        const range = document.createRange()
+        range.selectNodeContents(divRef.current)
+        range.collapse(false)
+        sel.removeAllRanges()
+        sel.addRange(range)
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useImperativeHandle(ref, () => ({
     clear() {
@@ -138,9 +173,27 @@ const MentionInput = forwardRef<
     getText() { return serializeEditor(divRef.current!) },
   }))
 
-  useEffect(() => {
-    if (autoFocus) divRef.current?.focus()
-  }, [autoFocus])
+  function buildChip(email: string): HTMLSpanElement {
+    const chip = document.createElement("span")
+    chip.setAttribute("contenteditable", "false")
+    chip.setAttribute("data-mention", email)
+    chip.className = "mention-chip"
+    chip.textContent = `@${email}`
+    const btn = document.createElement("button")
+    btn.type = "button"
+    btn.tabIndex = -1
+    btn.className = "mention-chip-remove"
+    btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>`
+    btn.addEventListener("mousedown", (e) => {
+      e.preventDefault()
+      chip.remove()
+      const empty = !serializeEditor(divRef.current!).trim()
+      setShowPlaceholder(empty)
+      onChange(empty)
+    })
+    chip.appendChild(btn)
+    return chip
+  }
 
   function detectMention() {
     const sel = window.getSelection()
@@ -180,24 +233,7 @@ const MentionInput = forwardRef<
       sel.addRange(r)
     }
     // Build chip
-    const chip = document.createElement("span")
-    chip.setAttribute("contenteditable", "false")
-    chip.setAttribute("data-mention", email)
-    chip.className = "mention-chip"
-    chip.textContent = `@${email}`
-    const btn = document.createElement("button")
-    btn.type = "button"
-    btn.tabIndex = -1
-    btn.className = "mention-chip-remove"
-    btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>`
-    btn.addEventListener("mousedown", (e) => {
-      e.preventDefault()
-      chip.remove()
-      const empty = !serializeEditor(divRef.current!).trim()
-      setShowPlaceholder(empty)
-      onChange(empty)
-    })
-    chip.appendChild(btn)
+    const chip = buildChip(email)
     // Insert chip at cursor then place cursor after trailing space
     const ir = sel.getRangeAt(0)
     ir.insertNode(chip)
@@ -216,6 +252,7 @@ const MentionInput = forwardRef<
 
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === "Escape" && mentionQuery !== null) { setMentionQuery(null); e.preventDefault(); return }
+    if (e.key === "Escape" && onCancel) { onCancel(); e.preventDefault(); return }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault()
       const text = serializeEditor(divRef.current!).trim()
@@ -294,7 +331,8 @@ interface CommentItemProps {
 
 function CommentItem({ comment, cardId, currentUserPk, currentUserEmail, wsMembers, isReply = false }: CommentItemProps) {
   const [editing, setEditing] = useState(false)
-  const [editBody, setEditBody] = useState(comment.body)
+  const [editHasContent, setEditHasContent] = useState(false)
+  const editRef = useRef<MentionInputHandle>(null)
   const [showReplyBox, setShowReplyBox] = useState(false)
   const [replyHasContent, setReplyHasContent] = useState(false)
   const replyRef = useRef<MentionInputHandle>(null)
@@ -306,9 +344,10 @@ function CommentItem({ comment, cardId, currentUserPk, currentUserEmail, wsMembe
   const isOwn = currentUserPk === comment.author.pk
   const edited = comment.updated_at !== comment.created_at
 
-  const handleEditSave = () => {
-    if (!editBody.trim() || editBody === comment.body) { setEditing(false); return }
-    editComment({ id: comment.id, body: editBody.trim() }, { onSuccess: () => setEditing(false) })
+  const handleEditSave = (text: string) => {
+    const trimmed = text.trim()
+    if (!trimmed || trimmed === comment.body) { setEditing(false); return }
+    editComment({ id: comment.id, body: trimmed }, { onSuccess: () => setEditing(false) })
   }
 
   const handleReplySubmit = (text: string) => {
@@ -340,29 +379,34 @@ function CommentItem({ comment, cardId, currentUserPk, currentUserEmail, wsMembe
         {/* Body / edit form */}
         {editing ? (
           <div className="space-y-2">
-            <textarea
-              value={editBody}
-              onChange={(e) => setEditBody(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleEditSave() }
-                if (e.key === "Escape") { setEditing(false); setEditBody(comment.body) }
-              }}
-              rows={3}
+            <MentionInput
+              ref={editRef}
+              placeholder="Edit comment… (@ to mention)"
+              onSubmit={handleEditSave}
+              onCancel={() => setEditing(false)}
+              onChange={(isEmpty) => setEditHasContent(!isEmpty)}
+              members={wsMembers}
+              currentUserEmail={currentUserEmail}
               autoFocus
-              className="w-full text-sm text-foreground bg-background border border-border rounded-lg
-                         px-3 py-2 resize-none focus:outline-none focus:border-primary/50 transition-colors"
+              minHeight="3.5rem"
+              initialValue={comment.body}
             />
             <div className="flex gap-2">
               <button
-                onClick={handleEditSave}
-                disabled={isEditing}
+                type="button"
+                disabled={isEditing || !editHasContent}
+                onClick={() => {
+                  const text = editRef.current?.getText().trim()
+                  if (text) handleEditSave(text)
+                }}
                 className="bg-primary text-primary-foreground text-xs font-semibold rounded-lg px-3 py-1.5
                            hover:bg-primary/90 transition-colors disabled:opacity-50 cursor-pointer"
               >
                 Save
               </button>
               <button
-                onClick={() => { setEditing(false); setEditBody(comment.body) }}
+                type="button"
+                onClick={() => setEditing(false)}
                 className="text-xs text-muted-foreground hover:text-foreground cursor-pointer"
               >
                 Cancel
@@ -394,7 +438,7 @@ function CommentItem({ comment, cardId, currentUserPk, currentUserEmail, wsMembe
             )}
             {isOwn && (
               <button
-                onClick={() => { setEditing(true); setEditBody(comment.body) }}
+                onClick={() => { setEditing(true) }}
                 title="Edit"
                 className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground
                            hover:bg-secondary/70 transition-colors cursor-pointer"
