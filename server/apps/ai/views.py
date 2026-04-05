@@ -353,3 +353,103 @@ class DismissSuggestionView(APIView):
         suggestion.is_dismissed = True
         suggestion.save(update_fields=["is_dismissed"])
         return Response({"status": "dismissed"})
+
+
+class GenerateTemplateView(APIView):
+    """
+    POST /api/ai/generate-template/
+    Body: { prompt: str, workspace_slug: str }
+    Generates and saves a BoardTemplate from a natural language prompt.
+    """
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [AIRateThrottle]
+
+    def post(self, request):
+        from langchain_core.messages import HumanMessage, SystemMessage
+        from pydantic import BaseModel, Field
+        from apps.board_templates.models import BoardTemplate
+        from apps.board_templates.serializers import BoardTemplateSerializer
+        from apps.workspaces.models import Workspace, WorkspaceMembership
+
+        prompt = (request.data.get("prompt") or "").strip()
+        workspace_slug = (request.data.get("workspace_slug") or "").strip()
+        if not prompt:
+            return Response({"detail": "prompt is required."}, status=400)
+
+        workspace = get_object_or_404(Workspace, slug=workspace_slug)
+        if not WorkspaceMembership.objects.filter(workspace=workspace, user=request.user).exists():
+            return Response({"detail": "Not authorized."}, status=403)
+
+        class CardSchema(BaseModel):
+            title: str
+            description: str = ""
+            labels: list[str] = Field(default_factory=list)
+            checklist: list[dict] = Field(default_factory=list)
+
+        class ListSchema(BaseModel):
+            title: str
+            position: int
+            cards: list[CardSchema] = Field(default_factory=list)
+
+        class LabelSchema(BaseModel):
+            name: str
+            color: str
+
+        class TemplateOutput(BaseModel):
+            title: str
+            description: str
+            category: str
+            lists: list[ListSchema]
+            labels: list[LabelSchema] = Field(default_factory=list)
+
+        llm = get_llm(temperature=0.8).with_structured_output(TemplateOutput)
+        messages = [
+            SystemMessage(content=(
+                "You are an expert project manager creating Kanban board templates. "
+                "Generate a practical board with 3-5 lists, each having 2-4 sample cards. "
+                "Pick 2-5 meaningful labels with distinct hex colors. "
+                "category must be exactly one of: engineering, product, design, marketing, hr, general."
+            )),
+            HumanMessage(content=f"Create a Kanban board template for: {prompt}"),
+        ]
+        try:
+            result: TemplateOutput = llm.invoke(messages)
+        except Exception as exc:
+            return Response({"detail": f"AI error: {str(exc)}"}, status=502)
+
+        valid_categories = [c[0] for c in BoardTemplate.Category.choices]
+        template = BoardTemplate.objects.create(
+            title=result.title,
+            description=result.description,
+            category=result.category if result.category in valid_categories else "general",
+            is_system=False,
+            created_by=request.user,
+            workspace=workspace,
+            data={
+                "lists": [
+                    {
+                        "title": lst.title,
+                        "position": lst.position,
+                        "cards": [
+                            {
+                                "title": c.title,
+                                "description": c.description,
+                                "labels": c.labels,
+                                "checklist": c.checklist,
+                            }
+                            for c in lst.cards
+                        ],
+                    }
+                    for lst in result.lists
+                ],
+                "labels": [{"name": l.name, "color": l.color} for l in result.labels],
+            },
+        )
+        AIUsage.objects.create(
+            workspace=workspace,
+            user=request.user,
+            model=settings.GROQ_MODEL,
+            endpoint="generate-template",
+        )
+        return Response(BoardTemplateSerializer(template).data, status=201)

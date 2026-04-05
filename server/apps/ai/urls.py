@@ -7,9 +7,11 @@ from .views import (
     GenerateChecklistView,
     GenerateDescriptionView,
     GenerateSuggestionsView,
+    GenerateTemplateView,
 )
 
 urlpatterns = [
+    path("ai/generate-template/", GenerateTemplateView.as_view(), name="ai-generate-template"),
     path("ai/describe/", GenerateDescriptionView.as_view(), name="ai-describe"),
     path("ai/checklist/", GenerateChecklistView.as_view(), name="ai-checklist"),
     path("ai/suggest/", GenerateSuggestionsView.as_view(), name="ai-suggest"),

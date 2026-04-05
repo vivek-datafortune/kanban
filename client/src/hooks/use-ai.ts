@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { api } from "@/lib/api"
-import type { AISuggestion } from "@/types/board"
+import type { AISuggestion, BoardTemplate } from "@/types/board"
 
 export function useAISuggestions(cardId: string) {
   return useQuery<AISuggestion | null>({
@@ -66,6 +66,17 @@ export function useGenerateChecklist(cardId: string, boardId: string) {
       api.post<{ items: string[] }>(`/ai/checklist/`, { card_id: cardId, prompt }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["board", boardId] })
+    },
+  })
+}
+
+export function useGenerateTemplate() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: { prompt: string; workspace_slug: string }) =>
+      api.post<BoardTemplate>("/ai/generate-template/", payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["templates"] })
     },
   })
 }
