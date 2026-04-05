@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils"
 import CardActivity from "@/components/card/card-activity"
 import CardChecklist from "@/components/card/card-checklist"
 import CardTimeTracking from "@/components/card/card-time-tracking"
+import { DatePicker } from "@/components/ui/date-picker"
 import type { Card, Label, List } from "@/types/board"
 import type { User } from "@/types/auth"
 
@@ -317,7 +318,6 @@ export default function CardRightPanel({ card, boardId, lists, labels, workspace
   const { mutate: addLabel } = useAddCardLabel(boardId)
   const { mutate: removeLabel } = useRemoveCardLabel(boardId)
 
-  const [dueDate, setDueDate] = useState(card.due_date?.slice(0, 16) ?? "")
   const cardLabelIds = new Set(card.labels.map((l) => l.id))
 
   return (
@@ -387,15 +387,10 @@ export default function CardRightPanel({ card, boardId, lists, labels, workspace
               <Calendar className="size-3.5 text-muted-foreground shrink-0" />
               <span className="text-xs font-medium text-muted-foreground">Due date</span>
             </div>
-            <input
-              type="datetime-local"
-              value={dueDate}
-              onChange={(e) => {
-                setDueDate(e.target.value)
-                updateCard({ id: card.id, due_date: e.target.value ? new Date(e.target.value).toISOString() : null })
-              }}
-              className="flex-1 min-w-0 bg-secondary border border-border rounded-lg px-2.5 py-1.5
-                         text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/30 cursor-pointer"
+            <DatePicker
+              value={card.due_date ?? null}
+              onChange={(iso) => updateCard({ id: card.id, due_date: iso })}
+              placeholder="Pick a date"
             />
           </div>
 
