@@ -109,4 +109,23 @@ urlpatterns = [
     path("cards/<uuid:pk>/estimate/", views.CardEstimateView.as_view(), name="card-estimate"),
     path("time-entries/<uuid:pk>/", views.TimeEntryDetailView.as_view(), name="time-entry-detail"),
     path("boards/<uuid:pk>/time-report/", views.BoardTimeReportView.as_view(), name="time-report"),
+    # Saved filters
+    path("boards/<uuid:pk>/filters/", views.SavedFilterListCreateView.as_view(), name="saved-filter-list"),
+    path(
+        "boards/<uuid:board_pk>/filters/<uuid:pk>/",
+        views.SavedFilterDetailView.as_view(),
+        name="saved-filter-detail",
+    ),
+    # Analytics
+    path(
+        "workspaces/<slug:slug>/analytics/",
+        views.WorkspaceAnalyticsView.as_view(),
+        name="workspace-analytics",
+    ),
+    # Global search
+    path(
+        "workspaces/<slug:slug>/search/",
+        views.WorkspaceSearchView.as_view(),
+        name="workspace-search",
+    ),
 ]

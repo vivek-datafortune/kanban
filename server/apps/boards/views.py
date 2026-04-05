@@ -11,7 +11,7 @@ from apps.workspaces.permissions import IsWorkspaceAdmin, IsWorkspaceMember
 
 from apps.realtime.broadcast import broadcast_board_event, broadcast_card_updated, broadcast_workspace_event
 from .activity import log_activity
-from .models import Attachment, Board, Card, CardLabel, CardMember, ChecklistItem, Comment, Label, List, StarredBoard, Activity, TimeEntry
+from .models import Attachment, Board, Card, CardLabel, CardMember, ChecklistItem, Comment, Label, List, SavedFilter, StarredBoard, Activity, TimeEntry
 from .serializers import (
     ActivitySerializer,
     AttachmentSerializer,
@@ -26,6 +26,7 @@ from .serializers import (
     LabelSerializer,
     ListCreateSerializer,
     ListSerializer,
+    SavedFilterSerializer,
     TimeEntrySerializer,
 )
 
@@ -942,7 +943,7 @@ class TimerStopView(APIView):
 
     def post(self, request, pk):
         try:
-            card = Card.objects.select_related("list__board").get(pk=pk)
+            card = Card.objects.select_related("list__board__workspace").get(pk=pk)
         except Card.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
@@ -956,6 +957,7 @@ class TimerStopView(APIView):
             )
 
         from django.utils import timezone
+        from django.core.cache import cache
         entry.ended_at = timezone.now()
         entry.duration = entry.ended_at - entry.started_at
         entry.save(update_fields=["ended_at", "duration"])
@@ -967,6 +969,11 @@ class TimerStopView(APIView):
             details={"seconds": int(entry.duration.total_seconds())},
         )
         broadcast_card_updated(card.list.board_id, card.pk)
+        # Invalidate analytics cache for this workspace so time data refreshes immediately
+        slug = card.list.board.workspace.slug
+        for period in ("7d", "30d", "90d"):
+            cache.delete(f"analytics:{slug}:{period}:all")
+            cache.delete(f"analytics:{slug}:{period}:{card.list.board_id}")
         return Response(TimeEntrySerializer(entry).data)
 
 
@@ -1098,3 +1105,245 @@ class BoardTimeReportView(APIView):
             aggregated[key]["total_seconds"] += int(entry.duration.total_seconds())
 
         return Response(list(aggregated.values()))
+
+
+# ── Saved Filters ─────────────────────────────────────────────────────────────
+
+class SavedFilterListCreateView(generics.ListCreateAPIView):
+    """GET/POST saved filters for a board."""
+    serializer_class = SavedFilterSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return SavedFilter.objects.filter(
+            user=self.request.user,
+            board_id=self.kwargs["pk"],
+        )
+
+    def perform_create(self, serializer):
+        # Unset any existing default for this user+board when setting a new default
+        if serializer.validated_data.get("is_default"):
+            SavedFilter.objects.filter(
+                user=self.request.user,
+                board_id=self.kwargs["pk"],
+                is_default=True,
+            ).update(is_default=False)
+        serializer.save(user=self.request.user, board_id=self.kwargs["pk"])
+
+
+class SavedFilterDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """GET/PATCH/DELETE a specific saved filter."""
+    serializer_class = SavedFilterSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return SavedFilter.objects.filter(user=self.request.user)
+
+    def perform_update(self, serializer):
+        if serializer.validated_data.get("is_default"):
+            SavedFilter.objects.filter(
+                user=self.request.user,
+                board_id=self.kwargs.get("board_pk"),
+                is_default=True,
+            ).exclude(pk=self.kwargs["pk"]).update(is_default=False)
+        serializer.save()
+
+
+# ── Analytics ─────────────────────────────────────────────────────────────────
+
+class WorkspaceAnalyticsView(APIView):
+    """GET /api/workspaces/:slug/analytics/?period=30d&board_id=uuid"""
+    permission_classes = [IsAuthenticated, IsWorkspaceMember]
+
+    def get(self, request, slug):
+        from datetime import timedelta
+
+        from django.core.cache import cache
+        from django.db.models import Count, Sum
+        from django.db.models.functions import TruncWeek
+        from django.utils import timezone
+
+        period_str = request.query_params.get("period", "30d")
+        days = {"7d": 7, "30d": 30, "90d": 90}.get(period_str, 30)
+        since = timezone.now() - timedelta(days=days)
+        board_id = request.query_params.get("board_id")
+
+        cache_key = f"analytics:{slug}:{period_str}:{board_id or 'all'}"
+        cached = cache.get(cache_key)
+        if cached:
+            return Response(cached)
+
+        try:
+            workspace = Workspace.objects.get(slug=slug)
+        except Workspace.DoesNotExist:
+            return Response({"detail": "Workspace not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        boards_qs = Board.objects.filter(workspace=workspace)
+        if board_id:
+            boards_qs = boards_qs.filter(pk=board_id)
+
+        cards_qs = Card.objects.filter(list__board__in=boards_qs)
+        done_list_titles = ["Done", "Complete", "Closed", "Completed"]
+
+        # Velocity — cards created vs moved-to-done per week
+        created_by_week = list(
+            cards_qs.filter(created_at__gte=since)
+            .annotate(week=TruncWeek("created_at"))
+            .values("week")
+            .annotate(count=Count("id"))
+            .order_by("week")
+        )
+        completed_by_week = list(
+            cards_qs.filter(
+                updated_at__gte=since,
+                list__title__in=done_list_titles,
+            )
+            .annotate(week=TruncWeek("updated_at"))
+            .values("week")
+            .annotate(count=Count("id"))
+            .order_by("week")
+        )
+
+        # Workload — per workspace member
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        members = User.objects.filter(workspace_memberships__workspace=workspace)
+
+        workload = []
+        for member in members:
+            member_cards = cards_qs.filter(members=member)
+            workload.append({
+                "user_id": member.pk,
+                "email": member.email,
+                "first_name": member.first_name,
+                "last_name": member.last_name,
+                "assigned": member_cards.count(),
+                "completed": member_cards.filter(list__title__in=done_list_titles).count(),
+                "overdue": member_cards.exclude(
+                    list__title__in=done_list_titles
+                ).filter(
+                    due_date__isnull=False,
+                    due_date__lt=timezone.now(),
+                ).count(),
+            })
+
+        # Label distribution
+        label_dist = list(
+            CardLabel.objects.filter(card__in=cards_qs)
+            .values("label__name", "label__color")
+            .annotate(count=Count("id"))
+            .order_by("-count")[:10]
+        )
+
+        # Time summary — scoped to the selected period
+        time_agg = TimeEntry.objects.filter(
+            card__in=cards_qs, duration__isnull=False, started_at__gte=since
+        ).aggregate(total=Sum("duration"))
+        total_seconds = int((time_agg["total"] or timedelta()).total_seconds())
+
+        result = {
+            "velocity": {
+                "created": [
+                    {"week": row["week"].isoformat(), "count": row["count"]}
+                    for row in created_by_week
+                ],
+                "completed": [
+                    {"week": row["week"].isoformat(), "count": row["count"]}
+                    for row in completed_by_week
+                ],
+            },
+            "workload": workload,
+            "label_distribution": label_dist,
+            "time_summary": {"total_seconds": total_seconds},
+        }
+
+        cache.set(cache_key, result, timeout=900)  # 15 minutes
+        return Response(result)
+
+
+# ── Global Search ─────────────────────────────────────────────────────────────
+
+class WorkspaceSearchView(APIView):
+    """GET /api/workspaces/:slug/search/?q=...&type=card&board_id=uuid"""
+    permission_classes = [IsAuthenticated, IsWorkspaceMember]
+
+    def get(self, request, slug):
+        from django.db.models import Q
+
+        q = request.query_params.get("q", "").strip()
+        if len(q) < 2:
+            return Response({"results": [], "total": 0, "facets": {"card": 0, "board": 0, "comment": 0}})
+
+        result_type = request.query_params.get("type")
+        board_id = request.query_params.get("board_id")
+
+        try:
+            workspace = Workspace.objects.get(slug=slug)
+        except Workspace.DoesNotExist:
+            return Response({"detail": "Workspace not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        boards_qs = Board.objects.filter(workspace=workspace)
+        if board_id:
+            boards_qs = boards_qs.filter(pk=board_id)
+
+        results = []
+
+        # Cards
+        if not result_type or result_type == "card":
+            card_qs = (
+                Card.objects.filter(list__board__in=boards_qs)
+                .filter(Q(title__icontains=q) | Q(description__icontains=q))
+                .select_related("list__board")[:20]
+            )
+            for card in card_qs:
+                in_title = q.lower() in card.title.lower()
+                results.append({
+                    "type": "card",
+                    "id": str(card.id),
+                    "title": card.title,
+                    "highlight": card.description[:120] if not in_title and card.description else "",
+                    "board": {"id": str(card.list.board_id), "title": card.list.board.title},
+                    "list": {"id": str(card.list_id), "title": card.list.title},
+                    "rank": 2 if in_title else 1,
+                })
+
+        # Boards
+        if not result_type or result_type == "board":
+            for b in boards_qs.filter(title__icontains=q)[:10]:
+                results.append({
+                    "type": "board",
+                    "id": str(b.id),
+                    "title": b.title,
+                    "highlight": "",
+                    "board": {"id": str(b.id), "title": b.title},
+                    "list": None,
+                    "rank": 2,
+                })
+
+        # Comments
+        if not result_type or result_type == "comment":
+            comment_qs = (
+                Comment.objects.filter(card__list__board__in=boards_qs)
+                .filter(body__icontains=q)
+                .select_related("card__list__board")[:10]
+            )
+            for c in comment_qs:
+                results.append({
+                    "type": "comment",
+                    "id": str(c.id),
+                    "title": c.card.title,
+                    "highlight": c.body[:120],
+                    "board": {"id": str(c.card.list.board_id), "title": c.card.list.board.title},
+                    "list": {"id": str(c.card.list_id), "title": c.card.list.title},
+                    "rank": 1,
+                })
+
+        results.sort(key=lambda r: -r["rank"])
+
+        facets = {
+            "card": sum(1 for r in results if r["type"] == "card"),
+            "board": sum(1 for r in results if r["type"] == "board"),
+            "comment": sum(1 for r in results if r["type"] == "comment"),
+        }
+
+        return Response({"results": results[:30], "total": len(results), "facets": facets})

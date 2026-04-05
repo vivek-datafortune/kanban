@@ -25,6 +25,8 @@ urlpatterns = [
     path("api/notifications/", include("apps.notifications.urls")),
     # AI features
     path("api/", include("apps.ai.urls")),
+    # Board templates
+    path("api/", include("apps.board_templates.urls")),
 ]
 
 if settings.DEBUG:

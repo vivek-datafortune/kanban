@@ -7,11 +7,71 @@ import { useBoard } from "@/hooks/use-boards"
 import { useMoveCard } from "@/hooks/use-cards"
 import { useCreateList, useUpdateList } from "@/hooks/use-lists"
 import { useBoardSocket, type PresenceUser } from "@/hooks/use-board-socket"
-import type { List } from "@/types/board"
+import type { ActiveFilters, Card, List } from "@/types/board"
+import type { User } from "@/types/auth"
 import { cn } from "@/lib/utils"
 import BackButton from "@/components/ui/back-button"
 import BoardList from "@/components/board/board-list"
 import BoardPresence from "@/components/board/board-presence"
+import FilterBar from "@/components/board/filter-bar"
+
+const EMPTY_FILTERS: ActiveFilters = {
+  labels: [],
+  members: [],
+  due: null,
+  priority: [],
+  search: "",
+}
+
+function matchesFilters(card: Card, filters: ActiveFilters): boolean {
+  // Labels: card must have ALL selected labels
+  if (filters.labels.length > 0) {
+    const cardLabelIds = card.labels.map((l) => l.id)
+    if (!filters.labels.every((id) => cardLabelIds.includes(id))) return false
+  }
+
+  // Members: card must have at least one selected member
+  if (filters.members.length > 0) {
+    const cardMemberPks = card.members.map((m) => String(m.pk))
+    if (!filters.members.some((pk) => cardMemberPks.includes(pk))) return false
+  }
+
+  // Due date
+  if (filters.due) {
+    const now = new Date()
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const weekEnd = new Date(today)
+    weekEnd.setDate(weekEnd.getDate() + 7)
+
+    if (filters.due === "no_date") {
+      if (card.due_date !== null) return false
+    } else {
+      if (!card.due_date) return false
+      const due = new Date(card.due_date)
+      if (filters.due === "overdue" && due >= now) return false
+      if (filters.due === "today") {
+        const dueDay = new Date(due.getFullYear(), due.getMonth(), due.getDate())
+        if (dueDay.getTime() !== today.getTime()) return false
+      }
+      if (filters.due === "this_week" && (due < now || due > weekEnd)) return false
+    }
+  }
+
+  // Priority
+  if (filters.priority.length > 0 && !filters.priority.includes(card.priority as "P0" | "P1" | "P2" | "P3")) {
+    return false
+  }
+
+  // Text search
+  if (filters.search.trim()) {
+    const q = filters.search.toLowerCase()
+    if (!card.title.toLowerCase().includes(q) && !card.description.toLowerCase().includes(q)) {
+      return false
+    }
+  }
+
+  return true
+}
 
 export default function BoardPage() {
   const { slug, boardId } = useParams<{ slug: string; boardId: string }>()
@@ -30,6 +90,7 @@ export default function BoardPage() {
 
   const [showAddList, setShowAddList] = useState(false)
   const [newListTitle, setNewListTitle] = useState("")
+  const [activeFilters, setActiveFilters] = useState<ActiveFilters>(EMPTY_FILTERS)
 
   // Local override for lists — set on drag, cleared when server syncs
   const [localLists, setLocalLists] = useState<List[] | null>(null)
@@ -44,6 +105,39 @@ export default function BoardPage() {
 
   // Use local override while it exists, otherwise use server data
   const lists = localLists ?? serverLists
+
+  // Apply client-side filters
+  const isFiltering =
+    activeFilters.labels.length > 0 ||
+    activeFilters.members.length > 0 ||
+    activeFilters.due !== null ||
+    activeFilters.priority.length > 0 ||
+    activeFilters.search.trim().length > 0
+
+  const filteredLists = useMemo(() => {
+    if (!isFiltering) return lists
+    return lists.map((lst) => ({
+      ...lst,
+      cards: lst.cards.filter((card) => matchesFilters(card, activeFilters)),
+    }))
+  }, [lists, activeFilters, isFiltering])
+
+  // Collect unique members from all cards for the filter bar
+  const boardMembers = useMemo<User[]>(() => {
+    const seen = new Set<number>()
+    const users: User[] = []
+    for (const lst of serverLists) {
+      for (const card of lst.cards) {
+        for (const member of card.members) {
+          if (!seen.has(member.pk)) {
+            seen.add(member.pk)
+            users.push(member)
+          }
+        }
+      }
+    }
+    return users
+  }, [serverLists])
 
   const handleDragEnd = useCallback(
     (result: DropResult) => {
@@ -198,6 +292,14 @@ export default function BoardPage() {
         </div>
       </motion.div>
 
+      {/* Filter bar */}
+      <FilterBar
+        boardId={boardId!}
+        labels={board.labels ?? []}
+        members={boardMembers}
+        onFilterChange={setActiveFilters}
+      />
+
       {/* Board content */}
       <div className="flex-1 overflow-x-auto overflow-y-hidden p-6">
         <DragDropContext onDragEnd={handleDragEnd}>
@@ -208,7 +310,7 @@ export default function BoardPage() {
                 {...provided.droppableProps}
                 className="flex gap-5 items-start h-full"
               >
-                {lists.map((list, index) => (
+                {filteredLists.map((list, index) => (
                   <BoardList
                     key={list.id}
                     list={list}

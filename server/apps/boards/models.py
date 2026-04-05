@@ -1,6 +1,8 @@
 import uuid
 
 from django.conf import settings
+from django.contrib.postgres.indexes import GinIndex
+from django.contrib.postgres.search import SearchVectorField
 from django.db import models
 
 from apps.workspaces.models import Workspace
@@ -112,9 +114,13 @@ class Card(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    search_vector = SearchVectorField(null=True, blank=True)
 
     class Meta:
         ordering = ["position"]
+        indexes = [
+            GinIndex(fields=["search_vector"], name="card_search_vector_idx"),
+        ]
 
     def __str__(self):
         return self.title
@@ -241,6 +247,36 @@ class Attachment(models.Model):
 
     def __str__(self):
         return f"{self.filename} on {self.card}"
+
+
+class SavedFilter(models.Model):
+    """A named filter combination saved by a user for a board."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="saved_filters",
+    )
+    board = models.ForeignKey(
+        Board,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="saved_filters",
+    )
+    name = models.CharField(max_length=100)
+    # filters schema:
+    # { labels:[uuid], members:[uuid], due:"overdue|today|this_week|no_date",
+    #   priority:["P0",...], search:"keyword" }
+    filters = models.JSONField(default=dict)
+    is_default = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-is_default", "name"]
+
+    def __str__(self):
+        return f"{self.name} ({self.user})"
 
 
 class TimeEntry(models.Model):

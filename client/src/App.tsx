@@ -8,6 +8,8 @@ import WorkspacePage from "@/pages/workspace"
 import WorkspaceSettingsPage from "@/pages/workspace-settings"
 import BoardPage from "@/pages/board"
 import CardPage from "@/pages/card"
+import TemplatesPage from "@/pages/templates"
+import AnalyticsPage from "@/pages/analytics"
 import AppLayout from "@/components/app-layout"
 import ProtectedRoute from "@/components/protected-route"
 import { useTheme } from "@/hooks/use-theme"
@@ -34,6 +36,8 @@ function App() {
           <Route path="/w/:slug/settings" element={<WorkspaceSettingsPage />} />
           <Route path="/w/:slug/b/:boardId" element={<BoardPage />} />
           <Route path="/w/:slug/b/:boardId/c/:cardId" element={<CardPage />} />
+          <Route path="/w/:slug/templates" element={<TemplatesPage />} />
+          <Route path="/w/:slug/analytics" element={<AnalyticsPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

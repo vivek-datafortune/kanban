@@ -2,7 +2,7 @@ from rest_framework import serializers
 
 from apps.users.serializers import UserSerializer
 
-from .models import Attachment, Board, Card, CardLabel, CardMember, ChecklistItem, Comment, Label, List, StarredBoard, Activity, TimeEntry
+from .models import Attachment, Board, Card, CardLabel, CardMember, ChecklistItem, Comment, Label, List, SavedFilter, StarredBoard, Activity, TimeEntry
 
 
 class AttachmentSerializer(serializers.ModelSerializer):
@@ -228,3 +228,10 @@ class TimeEntrySerializer(serializers.ModelSerializer):
         if obj.duration is None:
             return None
         return int(obj.duration.total_seconds())
+
+
+class SavedFilterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SavedFilter
+        fields = ("id", "user", "board", "name", "filters", "is_default", "created_at")
+        read_only_fields = ("id", "user", "created_at")

@@ -143,3 +143,117 @@ export interface Comment {
   created_at: string
   updated_at: string
 }
+
+// ── Board Templates ────────────────────────────────────────────────────────
+
+export interface BoardTemplateCard {
+  title: string
+  description?: string
+  labels?: string[]
+  checklist?: { text: string }[]
+}
+
+export interface BoardTemplateList {
+  title: string
+  position: number
+  cards: BoardTemplateCard[]
+}
+
+export interface BoardTemplateData {
+  lists: BoardTemplateList[]
+  labels: { name: string; color: string }[]
+}
+
+export interface BoardTemplate {
+  id: string
+  title: string
+  description: string
+  category: "engineering" | "product" | "design" | "marketing" | "hr" | "general"
+  is_system: boolean
+  use_count: number
+  data?: BoardTemplateData
+  created_by?: User | null
+  created_at: string
+}
+
+// ── Saved Filters ──────────────────────────────────────────────────────────
+
+export interface SavedFilter {
+  id: string
+  user: string
+  board: string | null
+  name: string
+  filters: {
+    labels?: string[]
+    members?: string[]
+    due?: "overdue" | "today" | "this_week" | "no_date"
+    priority?: ("P0" | "P1" | "P2" | "P3")[]
+    search?: string
+  }
+  is_default: boolean
+  created_at: string
+}
+
+export interface ActiveFilters {
+  labels: string[]
+  members: string[]
+  due: "overdue" | "today" | "this_week" | "no_date" | null
+  priority: ("P0" | "P1" | "P2" | "P3")[]
+  search: string
+}
+
+// ── Analytics ─────────────────────────────────────────────────────────────
+
+export interface VelocityPoint {
+  week: string
+  count: number
+}
+
+export interface WorkloadMember {
+  user_id: number
+  email: string
+  first_name: string
+  last_name: string
+  assigned: number
+  completed: number
+  overdue: number
+}
+
+export interface LabelDistribution {
+  label__name: string
+  label__color: string
+  count: number
+}
+
+export interface AnalyticsData {
+  velocity: {
+    created: VelocityPoint[]
+    completed: VelocityPoint[]
+  }
+  workload: WorkloadMember[]
+  label_distribution: LabelDistribution[]
+  time_summary: { total_seconds: number }
+}
+
+// ── Search ────────────────────────────────────────────────────────────────
+
+export interface SearchResultBoard {
+  id: string
+  title: string
+}
+
+export interface SearchResult {
+  type: "card" | "board" | "comment"
+  id: string
+  title: string
+  highlight: string
+  board: SearchResultBoard
+  list: SearchResultBoard | null
+  rank: number
+}
+
+export interface SearchResponse {
+  results: SearchResult[]
+  total: number
+  facets: { card: number; board: number; comment: number }
+}

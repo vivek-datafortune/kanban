@@ -1,11 +1,13 @@
-import { NavLink, Outlet, useNavigate } from "react-router-dom"
+import { useEffect, useState } from "react"
+import { NavLink, Outlet, useNavigate, useParams } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
-import { Kanban, LogOut, Sun, Moon, Monitor, Plus, Layers, Square } from "lucide-react"
+import { Kanban, LogOut, Sun, Moon, Monitor, Plus, Layers, Square, BarChart2, LayoutTemplate, Search, ChevronRight } from "lucide-react"
 import { useStore } from "@/store/app.store"
 import { useLogout, useCurrentUser } from "@/hooks/use-auth"
 import { useTheme, type Theme } from "@/hooks/use-theme"
 import { useWorkspaces } from "@/hooks/use-workspaces"
 import NotificationBell from "@/components/notification-bell"
+import SearchCommand from "@/components/search/search-command"
 import { cn } from "@/lib/utils"
 import { useElapsedSeconds, useStopTimer } from "@/hooks/use-time-tracking"
 
@@ -64,12 +66,45 @@ function ActiveTimerPill() {
 }
 
 export default function AppLayout() {
-  const { user } = useStore()
+  const { user, searchOpen, setSearchOpen } = useStore()
   const { mutate: logout, isPending } = useLogout()
   const { theme, setTheme } = useTheme()
   const { data: workspaces } = useWorkspaces()
+  const { slug: activeSlug } = useParams<{ slug: string }>()
+  const [expandedWorkspaces, setExpandedWorkspaces] = useState<Set<string>>(() => new Set(activeSlug ? [activeSlug] : []))
+
+  // Auto-expand the workspace when navigating into one
+  useEffect(() => {
+    if (activeSlug) {
+      setExpandedWorkspaces((prev) => new Set([...prev, activeSlug]))
+    }
+  }, [activeSlug])
+
+  const toggleWorkspace = (slug: string) => {
+    setExpandedWorkspaces((prev) => {
+      const next = new Set(prev)
+      if (next.has(slug)) next.delete(slug)
+      else next.add(slug)
+      return next
+    })
+  }
 
   useCurrentUser()
+
+  // Global Cmd+K / Ctrl+K shortcut
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault()
+        setSearchOpen(true)
+      }
+      if (e.key === "Escape" && searchOpen) {
+        setSearchOpen(false)
+      }
+    }
+    window.addEventListener("keydown", handler)
+    return () => window.removeEventListener("keydown", handler)
+  }, [searchOpen, setSearchOpen])
 
   const themeOptions: { value: Theme; icon: typeof Sun }[] = [
     { value: "light", icon: Sun },
@@ -96,28 +131,97 @@ export default function AppLayout() {
         {/* Divider */}
         <div className="mx-5 h-px bg-linear-to-r from-transparent via-border to-transparent" />
 
+        {/* Search button */}
+        <div className="px-3 pt-3">
+          <button
+            onClick={() => setSearchOpen(true)}
+            className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-muted-foreground bg-secondary/60 border border-border hover:bg-secondary/80 transition-colors cursor-pointer"
+          >
+            <Search className="size-4 shrink-0" strokeWidth={2} />
+            <span className="flex-1 text-left">Search...</span>
+            <kbd className="text-[10px] font-mono bg-background border border-border rounded px-1.5 py-0.5 text-muted-foreground">
+              ⌘K
+            </kbd>
+          </button>
+        </div>
+
         {/* Workspaces nav */}
         <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
           <p className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
             Workspaces
           </p>
-          {workspaces?.map((ws) => (
-            <NavLink
-              key={ws.id}
-              to={`/w/${ws.slug}`}
-              className={({ isActive }) =>
-                cn(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
-                  isActive
-                    ? "bg-primary/10 text-primary"
-                    : "text-foreground hover:bg-secondary/60"
-                )
-              }
-            >
-              <Layers className="size-4 shrink-0" strokeWidth={2} />
-              <span className="truncate">{ws.name}</span>
-            </NavLink>
-          ))}
+          {workspaces?.map((ws) => {
+            const isExpanded = expandedWorkspaces.has(ws.slug)
+            return (
+              <div key={ws.id} className="space-y-0.5">
+                <NavLink
+                  to={`/w/${ws.slug}`}
+                  end
+                  className={({ isActive }) =>
+                    cn(
+                      "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
+                      isActive
+                        ? "bg-primary/10 text-primary"
+                        : "text-foreground hover:bg-secondary/60"
+                    )
+                  }
+                >
+                  <Layers className="size-4 shrink-0" strokeWidth={2} />
+                  <span className="truncate flex-1">{ws.name}</span>
+                  <button
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleWorkspace(ws.slug) }}
+                    className="p-0.5 rounded cursor-pointer shrink-0"
+                  >
+                    <ChevronRight
+                      className={cn("size-3.5 transition-transform duration-200", isExpanded && "rotate-90")}
+                    />
+                  </button>
+                </NavLink>
+                <AnimatePresence initial={false}>
+                  {isExpanded && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2, ease: "easeInOut" }}
+                      className="overflow-hidden"
+                    >
+                      <div className="space-y-0.5 pb-1">
+                        <NavLink
+                          to={`/w/${ws.slug}/analytics`}
+                          className={({ isActive }) =>
+                            cn(
+                              "flex items-center gap-3 pl-9 pr-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200",
+                              isActive
+                                ? "bg-primary/10 text-primary"
+                                : "text-muted-foreground hover:text-foreground hover:bg-secondary/60"
+                            )
+                          }
+                        >
+                          <BarChart2 className="size-3.5 shrink-0" />
+                          <span>Analytics</span>
+                        </NavLink>
+                        <NavLink
+                          to={`/w/${ws.slug}/templates`}
+                          className={({ isActive }) =>
+                            cn(
+                              "flex items-center gap-3 pl-9 pr-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200",
+                              isActive
+                                ? "bg-primary/10 text-primary"
+                                : "text-muted-foreground hover:text-foreground hover:bg-secondary/60"
+                            )
+                          }
+                        >
+                          <LayoutTemplate className="size-3.5 shrink-0" />
+                          <span>Templates</span>
+                        </NavLink>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )
+          })}
           <NavLink
             to="/create-workspace"
             className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-all duration-200"
@@ -177,6 +281,9 @@ export default function AppLayout() {
       <main className="flex-1 min-w-0">
         <Outlet />
       </main>
+
+      {/* Global Search Command */}
+      <SearchCommand open={searchOpen} onOpenChange={setSearchOpen} />
     </div>
   )
 }

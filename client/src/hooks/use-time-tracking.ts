@@ -42,6 +42,7 @@ export function useStopTimer(cardId: string, boardId: string) {
       setActiveTimer(null)
       queryClient.invalidateQueries({ queryKey: ["time-entries", cardId] })
       queryClient.invalidateQueries({ queryKey: ["board", boardId] })
+      queryClient.invalidateQueries({ queryKey: ["analytics"] })
     },
   })
 }
@@ -55,6 +56,7 @@ export function useAddManualTime(cardId: string, boardId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["time-entries", cardId] })
       queryClient.invalidateQueries({ queryKey: ["board", boardId] })
+      queryClient.invalidateQueries({ queryKey: ["analytics"] })
     },
   })
 }
@@ -67,6 +69,7 @@ export function useDeleteTimeEntry(cardId: string, boardId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["time-entries", cardId] })
       queryClient.invalidateQueries({ queryKey: ["board", boardId] })
+      queryClient.invalidateQueries({ queryKey: ["analytics"] })
     },
   })
 }
