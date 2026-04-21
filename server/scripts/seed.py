@@ -148,17 +148,24 @@ def get_card_titles(n: int) -> list[str]:
 # ─────────────────────────────────────────────────────────────────────────────
 # Main seed
 # ─────────────────────────────────────────────────────────────────────────────
-def seed():
+def seed(owner_email: str = ""):
     print("\n🌱  Starting seed...\n")
 
     # ── Primary owner — must already exist ───────────────────────────────────
-    OWNER_EMAIL = "vivek.kumar@datafortune.com"
-    try:
-        owner = User.objects.get(email=OWNER_EMAIL)
-        p(f"Owner: {owner.email} (id={owner.pk})")
-    except User.DoesNotExist:
-        print(f"❌  User '{OWNER_EMAIL}' not found. Cannot seed.")
-        sys.exit(1)
+    if not owner_email:
+        # Fall back to first superuser, then first user in the DB
+        owner = User.objects.filter(is_superuser=True).first() or User.objects.first()
+        if not owner:
+            print("❌  No users found. Register an account first, then re-run.")
+            sys.exit(1)
+        print(f"ℹ️   No --owner-email given. Using: {owner.email}")
+    else:
+        try:
+            owner = User.objects.get(email=owner_email)
+            p(f"Owner: {owner.email} (id={owner.pk})")
+        except User.DoesNotExist:
+            print(f"❌  User '{owner_email}' not found. Cannot seed.")
+            sys.exit(1)
 
     # ── Extra seed users (used as workspace members / card members only) ──────
     print("\n👤  Creating extra users...")
@@ -301,4 +308,12 @@ def seed():
 
 
 if __name__ == "__main__":
-    seed()
+    import argparse
+    parser = argparse.ArgumentParser(description="Seed the database with demo data.")
+    parser.add_argument(
+        "--owner-email",
+        default=os.environ.get("SEED_OWNER_EMAIL", ""),
+        help="Email of an existing user to use as the workspace owner.",
+    )
+    args = parser.parse_args()
+    seed(owner_email=args.owner_email)

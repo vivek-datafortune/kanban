@@ -403,18 +403,33 @@ class GenerateTemplateView(APIView):
             lists: list[ListSchema]
             labels: list[LabelSchema] = Field(default_factory=list)
 
-        llm = get_llm(temperature=0.8).with_structured_output(TemplateOutput)
+        llm = get_llm(temperature=0.8, max_tokens=1500)
         messages = [
             SystemMessage(content=(
                 "You are an expert project manager creating Kanban board templates. "
-                "Generate a practical board with 3-5 lists, each having 2-4 sample cards. "
-                "Pick 2-5 meaningful labels with distinct hex colors. "
-                "category must be exactly one of: engineering, product, design, marketing, hr, general."
+                "Respond with ONLY a valid JSON object — no markdown, no code fences, no extra text.\n"
+                "JSON shape:\n"
+                '{"title":"...","description":"...","category":"...","labels":[{"name":"...","color":"#rrggbb"}],"lists":[{"title":"...","position":1,"cards":[{"title":"...","description":"...","labels":["label name"],"checklist":[]}]}]}\n'
+                "Rules:\n"
+                "- Exactly 4 lists, exactly 2 cards per list, exactly 4 labels.\n"
+                "- Card labels must only reference label names defined in the labels array.\n"
+                "- category must be one of: engineering, product, design, marketing, hr, general.\n"
+                "- Keep titles short (under 8 words), descriptions under 15 words."
             )),
             HumanMessage(content=f"Create a Kanban board template for: {prompt}"),
         ]
         try:
-            result: TemplateOutput = llm.invoke(messages)
+            raw = llm.invoke(messages)
+            content = raw.content.strip()
+            # Strip markdown code fences if the model adds them anyway
+            if content.startswith("```"):
+                content = content.split("```")[1]
+                if content.startswith("json"):
+                    content = content[4:]
+                content = content.strip()
+            import json as _json
+            data = _json.loads(content)
+            result = TemplateOutput.model_validate(data)
         except Exception as exc:
             return Response({"detail": f"AI error: {str(exc)}"}, status=502)
 
