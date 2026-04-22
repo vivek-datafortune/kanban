@@ -14,6 +14,7 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 5173,
+    allowedHosts: true,
     // Tell the browser to connect HMR WebSocket to localhost (not the container IP)
     hmr: {
       host: 'localhost',
